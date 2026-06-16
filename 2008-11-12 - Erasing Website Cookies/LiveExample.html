@@ -1,0 +1,24 @@
+<input type=button value="Clear Cookies" onclick="ClearCookies()">
+<input type=button value="View Cookies" onclick="ViewCookies()">
+<textarea id=CookieBox style="width:700px;height:400px">FYI, you probably won’t have any cookies here by default ^_^; </textarea>
+<script type="text/javascript">
+function ViewCookies() //Output the current cookies in the textbox
+{
+	document.getElementById('CookieBox').value=document.cookie.replace(/;/g,';\n\n');
+}
+
+function ClearCookies() //Clear all the cookies on the current website
+{
+	var CookieNames=[]; //Remember the cookie names as we erase them for later output
+	var MyCookies=document.cookie; //Remember the original cookie string since it will be changing soon
+	var StartAt=0; //The current string pointer in MyCookies
+	do //Loop through all cookies
+	{
+		var CookieName=MyCookies.substring(StartAt, MyCookies.indexOf('=', StartAt)).replace(/^ /,''); //Get the next cookie name in the list, and strip off leading white space
+		CookieNames.push(CookieName); //Remember the cookie name
+		document.cookie=CookieName+"=;expires=Thu, 01-Jan-1970 00:00:01 GMT; path=/"; //Erase the cookie
+		StartAt=MyCookies.indexOf(';', StartAt)+1; //Move the string pointer to the end of the current cookie
+	} while(StartAt!=0)
+	document.getElementById('CookieBox').value='Clearing: '+CookieNames.join("\nClearing: "); //Output the erased cookie names
+}
+</script>
