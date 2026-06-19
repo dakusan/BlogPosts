@@ -1,0 +1,127 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "https://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<title>Diff</title>
+<style type="text/css">
+.Dif { color: red; }			/* A file containing differences */
+.DifD { color: red; }			/* A directory containing differences, this must be separated from files so when only showing "same" files, directories are not hidden */
+.Equ { color: black; }			/* An item containing no differences */
+.OnL { color: blue !important; }	/* An item only found on the left side */
+.OnR { color: green !important; }	/* An item only found on the right side */
+.Dir { font-weight: bold; }		/* A directory */
+.File { font-weight: normal;}		/* A file */
+.Info { color: purple; }		/* An item's extra info */
+
+.Legend { display: block !important; }	/* A legend example */
+.ToggleLink { text-decoration:none; }	/* A directory display toggle */
+.HeadSection span { font-weight: bold; text-decoration:underline; } 
+.HeadSection ul { margin-top:0; } 
+</style>
+</head>
+<body><a href="https://www.castledragmire.com/cdn-cgi/content?id=Qt_9KkbIEgWf8fKEjikFNYqPbdLTlGnfgd8_QFsIZcI-1788857407.7293892-1.2.1.1-J7XhAp98TIcrIkr1BvI0lO.a_ZfUC0b5lffm.ugMs8i4y2teeYeTwCE38_L7QK_5" aria-hidden="true" rel="nofollow noopener" style="display: none !important; visibility: hidden !important"></a>
+<div class=HeadSection>
+	<span>Legend:</span>
+	<ul>
+		<li>Differences:
+			<ul>
+				<li class="Legend Equ">No differences detected</li>
+				<li class="Legend Dif">File is different, or directory contains differences</li>
+				<li class="Legend OnL">File is only found on left side, when this happens to a directory, it is only counted as 1 difference</li>
+				<li class="Legend OnR">File is only found on right side, when this happens to a directory, it is only counted as 1 difference</li>
+			</ul>
+		</li>
+		<li>Type:
+			<ul>
+				<li class="Legend Dir">This is a directory with sub items. After the directory name, it lists as info the number of differences over the total number of sub items</li>
+				<li class="Legend File">This is a file. If both sides contain the file but are different, it lists as info the different strings</li>
+			</ul>
+		</li>
+		<li class="Legend Info">Info about the file/directory listed in between parenthesis.</li>
+	</ul>
+</div>
+
+<div class=HeadSection>
+	<span>Options:</span>
+	<ul>
+		<li><label><input type=radio name=DisplayType value=All checked onclick="ChangeDisplay(this);">Display all items</label></li>
+		<li><label><input type=radio name=DisplayType value=Same onclick="ChangeDisplay(this);">Display only same files (Displays all directories)</label></li>
+		<li>
+			<label><input type=radio name=DisplayType value=Different onclick="ChangeDisplay(this);">Display different items (Does not display synced directories)</label>
+			<ul>
+				<li><label><input type=checkbox name=DoNotDisplayLeftOnly onclick="ChangeDisplay(this);">Do not display left only items</label></li>
+				<li><label><input type=checkbox name=DoNotDisplayRightOnly onclick="ChangeDisplay(this);">Do not display right only items</label></li>
+			</ul>
+		</li>
+		<li><input type=button value="Collapse all items" onclick="ToggleAll(RootList, false);"></li>
+		<li><input type=button value="Expand all items" onclick="ToggleAll(RootList, true);"></li>
+	</ul>
+</div>
+
+Left Side: ./Dir1.txt<br>Right Side: ./Dir2.txt<br>Total Differences: 9<br>Total Items: 13<br><div id=Root><ul><li class="Dir DifD">DiffDir <span class=Info>(1/1)</span> <ul><li class="File Dif">Diff.txt <span class=Info>(9999-99-99 99:99:99 :: 1111-11-11 11:11:11)</span></li></ul></li><li class="Dir DifD OnL">LeftOnlyDir <span class=Info>(1/2)</span> <ul><li class="File Dif OnL">Left.txt</li><li class="File Dif OnL">Left2.txt</li></ul></li><li class="Dir DifD">PartialDir <span class=Info>(3/4)</span> <ul><li class="File Dif">Diff.txt <span class=Info>(9999-99-99 99:99:99 :: 1111-11-11 11:11:11)</span></li><li class="File Dif OnL">LeftOnly.txt</li><li class="File Dif OnR">RightOnly.txt</li><li class="File Equ">Same.txt</li></ul></li><li class="Dir DifD OnR">RightOnlyDir <span class=Info>(1/1)</span> <ul><li class="File Dif OnR">Right.txt</li></ul></li><li class="Dir Equ">SameDir <span class=Info>(0/1)</span> <ul><li class="File Equ">Same.txt</li></ul></li><li class="File Dif">Diff.txt <span class=Info>(9999-99-99 99:99:99 :: 1111-11-11 11:11:11)</span></li><li class="File Dif OnL">LeftOnly.txt</li><li class="File Dif OnR">RightOnly.txt</li><li class="File Equ">Same.txt</li></ul></div>
+<script type="text/javascript">
+function ChangeDisplay(SwitchObject) //Hides/Shows items depending on their "differences" state
+{
+	if(SwitchObject.name=='DisplayType')
+	{
+		ModifyCSS('Dif', 'display', SwitchObject.value!='Same' ? '' : 'none');
+		ModifyCSS('Equ', 'display', SwitchObject.value!='Different' ? '' : 'none');
+		return;
+	}
+	
+	ModifyCSS(SwitchObject.name=='DoNotDisplayLeftOnly' ? 'OnL' : 'OnR', 'display', SwitchObject.checked ? 'none' : '');
+}
+function ModifyCSS(Name, Rule, Value) //Modify a global CSS rule (1 stylesheet assumed)
+{
+	var MyStyleSheet=GetStyleSheet('Dif');
+	for(var i=0;i< MyStyleSheet.length;i++)
+		if(MyStyleSheet[i].selectorText=='.'+Name)
+		{
+			MyStyleSheet[i].style[Rule]=Value;
+			break;
+		}
+}
+function GetStyleSheet(FirstRule)
+{
+	var RulesName=(document.styleSheets[0].cssRules ? 'cssRules' : 'rules');
+	for(var i=0;i< document.styleSheets.length;i++)
+		if(document.styleSheets[i][RulesName][0].selectorText=="."+FirstRule)
+			return document.styleSheets[i][RulesName];
+}
+
+function ToggleDirectory(TheDirectory, DoExpand) //Expand or contract a single directory
+{
+	DoExpand=(DoExpand===undefined ? TheDirectory.firstChild.innerHTML=='+' : DoExpand); //If DoExpand is not defined, swap the current direction
+	TheDirectory.firstChild.innerHTML=(DoExpand ? '-' : '+');
+	TheDirectory.lastChild.style.display=(DoExpand ? '' : 'none');
+	return false; //Returns false so the anchor link is not followed
+}
+
+function ToggleAll(ListObject, DoExpand) //Expand or contract all directories (recursive)
+{
+	for(var i=0, ChildNode;i< ListObject.childNodes.length;i++)
+		if((ChildNode=ListObject.childNodes[i]).className.indexOf('Dir')!='-1')
+		{
+			ToggleAll(ChildNode.lastChild, DoExpand);
+			ToggleDirectory(ChildNode, DoExpand);
+		}
+}
+
+function AddToggles(ListObject) //Add directory expanding/collapsing toggle link (recursive). This is done in the JavaScript phase to make the returned HTML document smaller.
+{
+	for(var i=0, ChildNode;i< ListObject.childNodes.length;i++)
+		if((ChildNode=ListObject.childNodes[i]).className.indexOf('Dir')!='-1')
+		{
+			AddToggles(ChildNode.lastChild);
+			var NewLink=document.createElement('span');
+			NewLink.innerHTML='<a href="#" onclick="return ToggleDirectory(this.parentNode);" class="ToggleLink">-<'+'/a>';
+			ChildNode.insertBefore(NewLink.firstChild, ChildNode.firstChild);
+		}
+}
+
+//Prepare the document by adding toggle links and contracting all directories
+var RootList=document.getElementById('Root').firstChild;
+AddToggles(RootList);
+ToggleAll(RootList, false);
+</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a37cb42e4d182c52',t:'MTc4ODg1NzQwNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>

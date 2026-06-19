@@ -1,0 +1,9 @@
+Same.txt	9999-99-99 99:99:99
+Diff.txt	1111-11-11 11:11:11
+RightOnly.txt	9999-99-99 99:99:99
+PartialDir/Same.txt	9999-99-99 99:99:99
+PartialDir/Diff.txt	1111-11-11 11:11:11
+PartialDir/RightOnly.txt	9999-99-99 99:99:99
+SameDir/Same.txt	9999-99-99 99:99:99
+RightOnlyDir/Right.txt	9999-99-99 99:99:99
+DiffDir/Diff.txt	1111-11-11 11:11:11
