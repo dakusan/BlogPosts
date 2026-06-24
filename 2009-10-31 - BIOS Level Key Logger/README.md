@@ -37,7 +37,6 @@ The assembly code for the key logger is as follows:
 </div>
 
 ```asm
-;Copyright 2009 by Dakusan (http://www.castledragmire.com/Copyright)
 ;This is a boot loader keylogger (does not work once Windows XP loads)
 ;See http://www.castledragmire.com/Posts/BIOS_Level_Key_Logger for more information
 

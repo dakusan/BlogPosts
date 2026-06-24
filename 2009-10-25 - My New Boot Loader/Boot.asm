@@ -1,4 +1,3 @@
-;Copyright 2009 by Dakusan (https://www.castledragmire.com/Copyright). Licensed under Dakusan License v2.0 (https://www.castledragmire.com/Misc/Software_Licenses/Dakusan_License_v2.0.php).
 ;See https://www.castledragmire.com/Posts/My_New_Boot_Loader for more information
 
 ORG 0x7C00 ;Origin location

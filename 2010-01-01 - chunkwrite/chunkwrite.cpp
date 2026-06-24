@@ -1,4 +1,3 @@
-//Copyright 2009 by Dakusan (https://www.castledragmire.com/Copyright). Licensed under Dakusan License v2.0 (https://www.castledragmire.com/Misc/Software_Licenses/Dakusan_License_v2.0.php).
 //See https://www.castledragmire.com/Posts/chunkwrite for more information
 
 #define __LARGE64_FILES

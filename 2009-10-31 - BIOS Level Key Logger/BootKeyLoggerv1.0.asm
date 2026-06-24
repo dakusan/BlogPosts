@@ -1,4 +1,3 @@
-;Copyright 2009 by Dakusan (https://www.castledragmire.com/Copyright). Licensed under Dakusan License v2.0 (https://www.castledragmire.com/Misc/Software_Licenses/Dakusan_License_v2.0.php).
 ;This is a boot loader keylogger (does not work once Windows XP loads)
 ;See https://www.castledragmire.com/Posts/BIOS_Level_Key_Logger for more information
 ;This file is best viewed with a tab size of 4
