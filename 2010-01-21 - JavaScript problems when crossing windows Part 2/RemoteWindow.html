@@ -1,0 +1,18 @@
+<html><body><script type="text/javascript">
+//Generate an alert in the remote window
+function RemoteAlertString(TheString)
+{
+	alert('Remote String: '+TheString);
+}
+
+//Call functions in this window remotely through the "apply" member
+function RunFunctionInRemoteWindow(FunctionName, Parameters)
+{
+	//Manually copy the passed Parameters since "Parameters" may not be a valid JSObject anymore (this could be detected and array.slice used if it is still valid)
+	var ParametersCopy=[];
+	for(var i=0;i<Parameters.length;i++)
+		ParametersCopy[i]=Parameters[i];
+	
+	window[FunctionName].apply(window, ParametersCopy);
+}
+</script></body></html>

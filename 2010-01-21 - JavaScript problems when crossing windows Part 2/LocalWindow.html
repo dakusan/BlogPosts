@@ -1,0 +1,29 @@
+<html><body>
+<input type=button onclick="RunTest();" value='Click me when the second window has opened to run the test'>
+<script type="text/javascript">
+
+//Spawn the second window
+var NewWindow=window.open('RemoteWindow.html');
+
+//Run the test
+function RunTest()
+{
+	LocalAlertString('This is an alert generated from the local window');
+	NewWindow.RemoteAlertString('This is an alert generated from the remote window');
+	alert('The local window alert function is of type function: '+(LocalAlertString instanceof Function));
+	alert('The remote window alert function is of type function: '+(NewWindow.RemoteAlertString instanceof Function));
+	LocalAlertString.apply(window, ['This is an alert generated from the local window through the APPLY member']);
+
+	try {
+	NewWindow.RemoteAlertString.apply(NewWindow.window, ['This is an alert generated from the remote window through the APPLY member. This will not work in IE because the remote window\'s function is not actually a function.']);
+	} catch(e) { alert('The REMOTE APPLY failed: '+e.message); }
+
+	NewWindow.RunFunctionInRemoteWindow('RemoteAlertString', ['This is an alert generated from the remote window through the FIXED APPLY function.']);
+}
+
+//Generate an alert in the local window
+function LocalAlertString(TheString)
+{
+	alert('Local String: '+TheString);
+}
+</script></body></html>
