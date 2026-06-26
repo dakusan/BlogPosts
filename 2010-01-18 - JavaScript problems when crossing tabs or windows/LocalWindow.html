@@ -1,0 +1,8 @@
+<html><body>
+<input type=button onclick="RunTest();" value='Click me when the second window has opened to run the test'>
+<script type="text/javascript">
+Array.prototype.IsArray=true;
+var NewWindow=window.open('RemoteWindow.html'); //Spawn the second window
+function RunTest() { NewWindow.RunTest({}, [], new ExampleObject()); }; //Send the test data to remote window
+function ExampleObject() { } //An example class
+</script></body></html>
