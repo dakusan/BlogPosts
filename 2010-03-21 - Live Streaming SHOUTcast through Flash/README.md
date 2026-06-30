@@ -1,7 +1,6 @@
 <div>
 Original Post: <a href="https://www.castledragmire.com/Posts/Live_Streaming_SHOUTcast_through_Flash">Live Streaming SHOUTcast through Flash</a><br>
 Date: 2010-03-21<br>
-SubTitle: The one time I decide to look online before trying it out myself<br>
 Tags: Data Passing, Examples, Flash, PHP, Quick Fixes, SHOUTCast<br><br>
 
 <p>A client of mine wanted their website to have an applet that played streaming music from a <a href="http://www.shoutcast.com/">SHOUTcast</a> server. The easy solution would have been to just embed a Windows Media Player applet into the page, but that would only work for IE.</p>

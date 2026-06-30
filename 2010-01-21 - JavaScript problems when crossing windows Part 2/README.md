@@ -1,7 +1,6 @@
 <div>
 Original Post: <a href="https://www.castledragmire.com/Posts/JavaScript_problems_when_crossing_windows_Part_2">JavaScript problems when crossing windows Part 2</a><br>
 Date: 2010-01-21<br>
-SubTitle: IE being a pain in the butt like usual<br>
 Tags: Data Passing, Examples, JavaScript, Standards, Web browsers<br><br>
 
 <p>To continue the subject in my <a href="../2010-01-18 - JavaScript problems when crossing tabs or windows">last post</a>, these next cross-window bugs also derive from objects not being recognized properly when being passed between windows in JavaScript.</p>
