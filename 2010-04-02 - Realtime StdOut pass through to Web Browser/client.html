@@ -1,0 +1,40 @@
+<html xmlns="https://www.w3.org/1999/xhtml" xml:lang="en" lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" /><title>Client Example</title></head><body>
+
+<object classid="clsid:d27cdb6e-ae6d-11cf-96b8-444553540000" codebase="https://download.macromedia.com/pub/shockwave/cabs/flash/swflash.cab#version=9,0,0,0" width="1" height="1" id="client">
+<param name="allowScriptAccess" value="sameDomain" />
+<param name="movie" value="client.swf" />
+<embed src="client.swf" width="1" height="1" name="client" allowScriptAccess="sameDomain" type="application/x-shockwave-flash" pluginspage="https://www.macromedia.com/go/getflashplayer" />
+</object>
+
+<style type="text/css">
+#Info div { margin-bottom:10px; background-color:lightgreen; }
+</style>
+
+<input type=text id=IP value="127.0.0.1"> <input type=button value="Connect" onclick="Connect()"> <span id=ConnectionInfo>Click "Connect" to connect</span><br><br>
+
+<div id=Info></div>
+
+<script language="javascript">
+var isIE=navigator.appName.indexOf("Microsoft")!=-1;
+function getFlashMovie(movieName) { return (isIE ? window[movieName] : document[movieName]);  }
+function $(s) { return document.getElementById(s); }
+
+function Connect()
+{
+	getFlashMovie("client").OpenSocket($('IP').value, 1234);
+}
+
+function GetInfoFromFlash(Str)
+{
+	$('ConnectionInfo').firstChild.data=Str;
+}
+
+function GetPacket(Str)
+{
+	var NewDiv=document.createElement('DIV');
+	NewDiv.appendChild(document.createTextNode(Str));
+	$('Info').appendChild(NewDiv);
+}
+</script>
+</body>
+</html>
