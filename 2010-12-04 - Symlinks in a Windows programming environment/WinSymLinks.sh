@@ -1,0 +1,29 @@
+#!/bin/bash
+IFS=$'\n' #Spaces do not count as new delimiters
+
+function makewinlink
+{
+	LINK=$1
+	OPTIONS=$2
+	TARGET=`find $LINK -maxdepth 0 -printf %l`
+	LASTMODTIME=`find $LINK -maxdepth 0 -printf "%t"`
+	LINKDIR=`find $LINK -maxdepth 0 -printf %h`
+	TARGET=`echo $LINKDIR/$TARGET`
+	rm -f $LINK
+	cmd /c mklink $OPTIONS "$(cygpath -wa $LINK)" "$(cygpath -wa $TARGET)"
+	touch -h -d $LASTMODTIME $LINK
+}
+
+#Relink all directories
+FILES=`find -type l -print0 | xargs -0 -i find -L {} -type d -maxdepth 0`
+for f in $FILES
+do
+	makewinlink $f /D
+done
+
+#Relink all files
+FILES=`find -type l -print0 | xargs -0 -i find -L {} -type f -maxdepth 0`
+for f in $FILES
+do
+	makewinlink $f
+done
