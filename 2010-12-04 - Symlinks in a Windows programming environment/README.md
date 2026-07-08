@@ -46,4 +46,4 @@ done
 <br>
 <p>Make sure when committing symlinks in a GIT repository in Windows to use Cygwin with Cygwin style symlinks instead of TortoiseGIT. Also, as previously mentioned, after running this script, TortoiseGIT will show these symlinks as modified 😕. If this is a problem, you can always reverse the process in Cygwin by changing the “cmd /c mklink $OPTIONS” line to a “ln -s” in the above script (note that “target” and “symlink’s name” need to be switched) along with a few other changes.</p><br>
 
-<b>[EDIT ON 2011-01-03 @ 6:30am]</b> See <a href="../2011-01-03 - SymLink_Fix_for_Combining_Android_Project_Versions">here</a> for a better example of symlinking in Windows that uses relative paths. <b>[/EDIT]</b></div>
+<b>[EDIT ON 2011-01-03 @ 6:30am]</b> See <a href="../2011-01-03 - SymLink Fix for Combining Android Project Versions">here</a> for a better example of symlinking in Windows that uses relative paths. <b>[/EDIT]</b></div>
