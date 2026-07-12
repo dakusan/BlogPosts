@@ -67,3 +67,5 @@ foreach my $LocalBranch (@LocalBranches) {
 	}
 }
 ```
+
+And yet again, continued in <a href="../2013-07-25 - Windows “ln” (symbolic linking) support for Cygwin">Windows “ln” (symbolic linking) support for Cygwin</a>
