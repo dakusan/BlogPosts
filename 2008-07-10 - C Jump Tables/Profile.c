@@ -17,7 +17,7 @@
 #endif
 
 enum {OP_ADD=0, OP_SUB}; //assuming ADD=opcode 0 and so forth
-void DoOpcode(int OpcodeNumber, <b style="color:red">...</b>)
+void DoOpcode(int OpcodeNumber, ...)
 {
 	#ifndef UseSwitchStatement //If using JumpTable or FunctionPointers we need an array of the opcode jump locations
 		void *Opcodes[]={GET_OPCODE(ADD), GET_OPCODE(SUB)}; //assuming ADD=opcode 0 and so forth
@@ -35,11 +35,11 @@ void DoOpcode(int OpcodeNumber, <b style="color:red">...</b>)
 	//put the following OPCODE sections directly above this "DoOpcode" function
 	OPCODE(ADD)
 	{
-		//<b style="color:red">...</b>
+		//...
 	}
 	OPCODE(SUB)
 	{
-		//<b style="color:red">...</b>
+		//...
 	}
 
 	#ifdef UseSwitchStatement //End the switch statement

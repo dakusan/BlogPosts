@@ -1,4 +1,4 @@
-//Find PHP files with BOM
+//Find PHP files with BOM (Cygwin compatible)
 find . -name '*.php' -print0 | xargs -0 -n1000 grep -l $'^\xef\xbb\xbf'
 
 //Remove the BOMs (Cygwin compatible)
