@@ -9,18 +9,18 @@ Tags: Assembly, C, Examples, Jump Table, Programming hacks<br><br>
 </div>
 
 ```c
-void DoOpcode(int OpcodeNumber, <b style="color:red">...</b>)
+void DoOpcode(int OpcodeNumber, ...)
 {
 	void *Opcodes[]={&&ADD, &&SUB, &&JUMP, &&MUL}; //assuming ADD=opcode 0 and so forth
 	goto *Opcodes[OpcodeNumber];
-  	ADD:
-		//<b style="color:red">...</b>
+	ADD:
+		//...
 	SUB:
-		//<b style="color:red">...</b>
+		//...
 	JUMP:
-		//<b style="color:red">...</b>
+		//...
 	MUL:
-		//<b style="color:red">...</b>
+		//...
 }
 ```
 
@@ -51,7 +51,7 @@ void DoOpcode(int OpcodeNumber, <b style="color:red">...</b>)
 #endif
 
 enum {OP_ADD=0, OP_SUB}; //assuming ADD=opcode 0 and so forth
-void DoOpcode(int OpcodeNumber, <b style="color:red">...</b>)
+void DoOpcode(int OpcodeNumber, ...)
 {
 	#ifndef UseSwitchStatement //If using JumpTable or FunctionPointers we need an array of the opcode jump locations
 		void *Opcodes[]={GET_OPCODE(ADD), GET_OPCODE(SUB)}; //assuming ADD=opcode 0 and so forth
@@ -69,11 +69,11 @@ void DoOpcode(int OpcodeNumber, <b style="color:red">...</b>)
 	//put the following OPCODE sections directly above this "DoOpcode" function
 	OPCODE(ADD)
 	{
-		//<b style="color:red">...</b>
+		//...
 	}
 	OPCODE(SUB)
 	{
-		//<b style="color:red">...</b>
+		//...
 	}
 
 	#ifdef UseSwitchStatement //End the switch statement

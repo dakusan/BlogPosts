@@ -53,7 +53,7 @@ INSERT INTO MyTable VALUES
 
 ```php
 <?
-$Fields=Array('ClientNumber'=>'Client #', 'FirstName'=>'First Name', 'LastName'=>'Last Name', <b style="color:red">...</b>); //Field list
+$Fields=Array('ClientNumber'=>'Client #', 'FirstName'=>'First Name', 'LastName'=>'Last Name', ...); //Field list
 print '<form method=post action=index.php><table>'; //Form action needs to point to the current file
 foreach($Fields as $Name => $Value) //Output search text boxes
 	print "<tr><td>$Value</td><td><input name=\"$Name\" style='width:200px;' value=\"".
@@ -73,9 +73,9 @@ foreach($Fields as $Name => $Value) //Check each POSTed search parameter
 			//... value, otherwise, just a partial patch
 	}
 //Get data from MySQL
-mysql_connect('<b>SQL_HOST</b>', '<b>SQL_USERNAME</b>', '<b>SQL_PASSWORD</b>');
-mysql_select_db('<b>SQL_DATABASE</b>');
-$q=mysql_query('SELECT * FROM <b>TABLENAME</b> WHERE '.implode(' AND ', $SearchArray));
+mysql_connect('SQL_HOST', 'SQL_USERNAME', 'SQL_PASSWORD');
+mysql_select_db('SQL_DATABASE');
+$q=mysql_query('SELECT * FROM TABLENAME WHERE '.implode(' AND ', $SearchArray));
 
 //Output retrieved data
 $i=0;

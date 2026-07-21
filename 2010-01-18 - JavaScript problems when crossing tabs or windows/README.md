@@ -32,23 +32,23 @@ function ExampleObject() { } //An example class
 <html><body><script type="text/javascript">
 function RunTest(AnObject, AnArray, AnExampleObject)
 {
-   var MyTests=[
-      'AnObject instanceof Object',
-      'AnObject.IsArray',                               //Object.prototype does not have this (Array.prototype does)
-      'AnArray instanceof Object',
-      'AnArray instanceof Array',
-      'AnArray.IsArray',                                //This was added to the Array.prototype in the parent window
-      'AnArray instanceof opener.Array',                //This example does not work in IE7 because opener.x cannot be properly accessed
-      'AnExampleObject instanceof opener.ExampleObject',//This example does not work in IE7 because opener.x cannot be properly accessed
-      'AnExampleObject instanceof ExampleObject'        //This test should error because "ExampleObject" does not exist in this window
-   ];
-   
-   for(var i=0;i<MyTests.length;i++) //This runs each test like the following: alert("TEST: "+(TEST));
-      try {
-         eval('alert("'+MyTests[i]+': "+('+MyTests[i]+'));');
-      } catch(e) {
-         alert('Error on test "'+MyTests[i]+'": '+(e.hasOwnProperty('message') ? e.message : e.toString()));
-      }
+	var MyTests=[
+		'AnObject instanceof Object',
+		'AnObject.IsArray',                               //Object.prototype does not have this (Array.prototype does)
+		'AnArray instanceof Object',
+		'AnArray instanceof Array',
+		'AnArray.IsArray',                                //This was added to the Array.prototype in the parent window
+		'AnArray instanceof opener.Array',                //This example does not work in IE7 because opener.x cannot be properly accessed
+		'AnExampleObject instanceof opener.ExampleObject',//This example does not work in IE7 because opener.x cannot be properly accessed
+		'AnExampleObject instanceof ExampleObject'        //This test should error because "ExampleObject" does not exist in this window
+	];
+	
+	for(var i=0;i<MyTests.length;i++) //This runs each test like the following: alert("TEST: "+(TEST));
+		try {
+			eval('alert("'+MyTests[i]+': "+('+MyTests[i]+'));');
+		} catch(e) {
+			alert('Error on test "'+MyTests[i]+'": '+(e.hasOwnProperty('message') ? e.message : e.toString()));
+		}
 }
 </script></body></html>
 ```
