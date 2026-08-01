@@ -1,0 +1,1 @@
+<? print nl2br(htmlentities(shell_exec('sudo /var/www/Propagate.sh 2<&1'))); ?>
