@@ -55,14 +55,14 @@ Tags: Amazon, Blacklist, DNS, EC2, Examples, Linux, Security, Servers<br><br>
 	<li><b>Create the blacklist zone file</b><ul>
 		<li>Put the following into /var/named/blacklisted.db . Make sure to change dns.yourdomain.com to your domain (or otherwise, “localhost”), and 1.1.1.1 to dns.yourdomain.com’s (your server’s) IP address. Make sure to keep all periods intact.<br>
 <pre><code>$TTL 14400
-@       IN SOA <b>dns.yourdomain.com</b>. <b>dns.yourdomain.com</b> ( 2003052800  86400  300  604800  3600 )
-@       IN      NS   <b>dns.yourdomain.com</b>.
-@       IN      A    <b>1.1.1.1</b>
-*       IN      A    <b>1.1.1.1</b></code></pre>
+@       IN SOA <kbd>dns.yourdomain.com</kbd>. <kbd>dns.yourdomain.com</kbd> ( 2003052800  86400  300  604800  3600 )
+@       IN      NS   <kbd>dns.yourdomain.com</kbd>.
+@       IN      A    <kbd>1.1.1.1</kbd>
+*       IN      A    <kbd>1.1.1.1</kbd></code></pre>
 		</li>
 		<li>The first 2 lines tell the server the domains belong to it. The 3rd line sets the base blacklisted domain to your server’s IP. The 4th line sets all subdomains of the blacklisted domain to your server’s IP.</li>
 		<li>This can be done via (Update the first line with your values)<br>
-<pre><code>YOURDOMAIN="<b>dns.yourdomain.com</b>"; YOURIP="<b>1.1.1.1</b>";
+<pre><code>YOURDOMAIN="<kbd>dns.yourdomain.com</kbd>"; YOURIP="<kbd>1.1.1.1</kbd>";
 echo -ne "\$TTL 14400\n@       IN SOA $YOURDOMAIN. $YOURDOMAIN ( 2003052800  86400  300  604800  3600 )\n@       IN      NS   $YOURDOMAIN.\n@       IN      A    $YOURIP\n*       IN      A    $YOURIP" > /var/named/blacklisted.db;</code></pre>
 		</li>
 	</ul></li>
@@ -149,9 +149,9 @@ print `sudo /var/www/html/AddRules/restart_named`;
 		<li>Add the “apache” user to the “named” group so the script can update the list of domains in /var/named/blacklisted.conf via <code>usermod -a -G named apache; service httpd graceful;</code></li>
 	</ul></li>
 	<li><b>Run the domain update script</b><ul>
-		<li>To add a domain (separate by commas): http://<b>dns.yourdomain.com</b>/AddRules/?Domains=domain1.com,domain2.com</li>
-		<li>To remove a domain (add “Remove&amp;” after the “?”): http://<b>dns.yourdomain.com</b>/AddRules/?Remove&amp;Domains=domain1.com,domain2.com</li>
-		<li>To list the domains: http://<b>dns.yourdomain.com</b>/AddRules/?List</li>
+		<li>To add a domain (separate by commas): http://<kbd>dns.yourdomain.com</kbd>/AddRules/?Domains=domain1.com,domain2.com</li>
+		<li>To remove a domain (add “Remove&amp;” after the “?”): http://<kbd>dns.yourdomain.com</kbd>/AddRules/?Remove&amp;Domains=domain1.com,domain2.com</li>
+		<li>To list the domains: http://<kbd>dns.yourdomain.com</kbd>/AddRules/?List</li>
 	</ul></li>
 	<li><b>Password protect the domain update script</b><ul>
 		<li>Add to AddRules/.htaccess the following<br>
@@ -161,7 +161,7 @@ AuthUserFile "/var/www/html/AddRules/.htpasswd"
 require valid-user</code></pre></li>
 		<li><code>echo -ne 'AuthType Basic\nAuthName "Admins Only"\nAuthUserFile "/var/www/html/AddRules/.htpasswd"\nrequire valid-user' &gt; /var/www/html/AddRules/.htaccess</code></li>
 		<li><b><i>Warning</i></b>: Putting the password file in an http accessible directory is a security risk. I just did this for sake of organization.</li>
-		<li>Create the user+password via <code>htpasswd -bc /var/www/html/AddRules/.htpasswd <b>USERNAME</b></code> and then entering the password</li>
+		<li>Create the user+password via <code>htpasswd -bc /var/www/html/AddRules/.htpasswd <kbd>USERNAME</kbd></code> and then entering the password</li>
 	</ul></li>
 </ul><br><br>
 

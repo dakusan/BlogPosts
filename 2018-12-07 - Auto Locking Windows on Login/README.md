@@ -14,7 +14,7 @@ Tags: Automated, Boot, Boot Loader, Login, Quick Fixes, Security, Windows<br><br
 	</li>
 	<li>
 		<b>(Optional) Change the bootup timeout</b>:
-		In the windows command line, run: <code>bcdedit /timeout <b>5</b></code><br>
+		In the windows command line, run: <code>bcdedit /timeout <kbd>5</kbd></code><br>
 		Where 5 is a 5 second timeout.
 	</li>
 	<li>

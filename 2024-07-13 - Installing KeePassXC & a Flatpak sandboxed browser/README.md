@@ -10,7 +10,7 @@ Tags: Chrome, Diagnosing, Firefox, Flatpak, KeePass, KeePassXC, Linux, Linux Mig
 2) The interprocess communication pipe socket had been renamed from <b>kpxc_server</b> to <b>org.keepassxc.KeePassXC.BrowserServer</b>.
 </p><br>
 
-<p>The following are the instructions to get KeePassXC running in Flatpak versions of both Chrome and Firefox. This was tested on Linux Mint 21.3 with both Ungoogled Chromium and Firefox. You will need to change the <b>KP_FLATPAK_PACKAGE</b> if you use other versions of Chrome.</p><br>
+<p>The following are the instructions to get KeePassXC running in Flatpak versions of both Chrome and Firefox. This was tested on Linux Mint 21.3 with both Ungoogled Chromium and Firefox. You will need to change the <kbd>KP_FLATPAK_PACKAGE</kbd> if you use other versions of Chrome.</p><br>
 
 <ol>
 	<li>
@@ -41,7 +41,7 @@ KP_JSON_END=~/.var/app/<kbd>$KP_FLATPAK_PACKAGE</kbd>/.mozilla/native-messaging-
 			<li>Download the plugin listed on this screen in your browser</li>
 			<li>Click "OK"</li>
 		</ul>
-		Note: This creates <b>$KP_JSON_START/$KP_JSON_NAME</b><br><br>
+		Note: This creates <kbd>$KP_JSON_START</kbd>/<kbd>$KP_JSON_NAME</kbd><br><br>
 	</li>
 	<li>
 		<ins>Set up the needed files in the sandbox:</ins><br>

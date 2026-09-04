@@ -42,7 +42,7 @@ fclose($sock);
 
 The final two steps to get this working were:
 <ol>
-	<li>Setting the Flash Applet’s <b>URL</b> variable to the PHP file</li>
+	<li>Setting the Flash Applet’s <kbd>URL</kbd> variable to the PHP file</li>
 	<li>Turning off PHP output buffering for the file. This can only be done through Apache or the php.ini depending on the server setup. This is very important, as if it’s on, the data will never get sent to the user.</li>
 </ol><br>
 

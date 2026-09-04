@@ -17,7 +17,7 @@ Tags: Data Passing, Examples, MySQL, PHP<br><br>
 </table>
 From there, there are only 2 more steps to complete the query.
 <ul>
-	<li>Add the start of the query: “INSERT INTO <b>TABLENAME</b> VALUES”</li>
+	<li>Add the start of the query: “INSERT INTO <kbd>TABLENAME</kbd> VALUES”</li>
 	<li>End the query by changing the last row's comma “,” at the very end of the line to a semi-colon “;”.</li>
 </ul><br>
 

@@ -9,15 +9,15 @@ Tags: Convert, Examples, Formats, Github, HTML, Markdown, PHP<br><br>
 Usage:
 <ul>
 	<li>The variables that can be updated are all at the top of the file.</li>
-	<li>The script will always output the finished result to the user’s browser, but can also optionally save it to an external file by setting the <b>$SaveFileName</b> variable.</li>
+	<li>The script will always output the finished result to the user’s browser, but can also optionally save it to an external file by setting the <kbd>$SaveFileName</kbd> variable.</li>
 	<li>Stylesheet:<ul>
-		<li>The script automatically includes a specified stylesheet from the <b>$StylesheetLocation</b> variable.</li>
+		<li>The script automatically includes a specified stylesheet from the <kbd>$StylesheetLocation</kbd> variable.</li>
 		<li>The stylesheet I used is from <a href="https://gist.github.com/somebox/1082608">https://gist.github.com/somebox/1082608</a>. I’m not too happy with its coloring scheme, but it’ll do for now.</li>
 		<li>The required modifications that need to be made to the css are to change “body” to “.GHMarkdown”, and then add “.GHMarkdown” before all other rules.</li>
 		<li><a href="https://www.castledragmire.com/layoutx/github-markdown.css">This</a> is the one I am currently using for my website, but it also has a few modifications made specifically for my layouts.</li>
 	</ul></li>
 	<li>Modifications<ul>
-		<li>In my markdowns, I like to link to internal sections by first creating a bookmark as “&lt;div name="BOOKMARK_NAME"&gt;...&lt;/div&gt;” and then linking via “[LinkName](#BOOKMARK_NAME)”. While this works on github, the bookmark’s names are actually changed to something like “user-content-BOOKMARK-NAME”, which is not useable outside of github. The first <b>$RegexModifications</b> item therefore updates the bookmarks back to their original name, and turns them into &lt;span&gt;s (which github does not support).</li>
+		<li>In my markdowns, I like to link to internal sections by first creating a bookmark as “&lt;div name="BOOKMARK_NAME"&gt;...&lt;/div&gt;” and then linking via “[LinkName](#BOOKMARK_NAME)”. While this works on github, the bookmark’s names are actually changed to something like “user-content-BOOKMARK-NAME”, which is not useable outside of github. The first <kbd>$RegexModifications</kbd> item therefore updates the bookmarks back to their original name, and turns them into &lt;span&gt;s (which github does not support).</li>
 		<li>The second rule just removes the “aria-hidden” attributes, which my W3C checking scripts throw a warning on.</li>
 	</ul></li>
 	<li>Note that sometimes, the script may return an error of “transfer closed with XXX bytes remaining to read”. This means that github denied the request (probably due to too many requests in too short a timespan), but the input is too large so github prematurely terminated the connection. If this happens, try sending a tiny input and see if you get back a proper error.</li>

@@ -77,7 +77,7 @@ for(int i=0;i<FieldList.length;i++)
 <div><ul><ul>
 		<li>
 			<b>Setting a color matrix on an image</b>: If you have 2 ImageViews that display the same resource image, and either has a color matrix set on it, the will both share one of the color matrices. If this occurs, copy the image the resource, or use a separate image resource. For kicks, here is an example of setting an inverse color matrix on an image.<br>
-			<code>((ImageView)findViewById(R.id.<b>IMAGE_ID</b>)).setColorFilter(new ColorMatrixColorFilter(new float[] {-1,0,0,0,255, 0,-1,0,0,255, 0,0,-1,0,255, 0,0,0,1,0}));</code>
+			<code>((ImageView)findViewById(R.id.<kbd>IMAGE_ID</kbd>)).setColorFilter(new ColorMatrixColorFilter(new float[] {-1,0,0,0,255, 0,-1,0,0,255, 0,0,-1,0,255, 0,0,0,1,0}));</code>
 		</li>
 		<li>
 			<b>Setting to full screen</b>:<br>
@@ -86,7 +86,7 @@ getWindow().setFlags(<b>FULLSCREEN</b> ? WindowManager.LayoutParams.FLAG_FULLSCR
 		</li>
 		<li>
 			<b>Starting another local activity</b>: Instead of using <i>Intent(String action)</i> for <i>Context.StartActivity</i>, as the <a href="http://developer.android.com/reference/android/content/Intent.html">Reference</a> explains, it is much easier to use <i>Intent(Context packageContext, Class&lt;?&gt; cls)</i> like the following: (called from inside an Activity)<br>
-			<code>startActivity(new Intent(this, <b>OTHER_ACTIVITY_NAME</b>.class);</code>
+			<code>startActivity(new Intent(this, <kbd>OTHER_ACTIVITY_NAME</kbd>.class);</code>
 		</li>
 		<li>
 			<b>Creating a timed event that updates the UI</b>: A function running through java.util.Timer cannot interact with the GUI. One solution to make a timer is with the android.os.Handler interface.

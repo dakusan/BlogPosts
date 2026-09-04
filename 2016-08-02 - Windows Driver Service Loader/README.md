@@ -6,16 +6,16 @@ Tags: C, Command Line Utility, Driver, Kernel, Loader, Operating Systems, Servic
 <p>Following is some C++ source code for a Windows kernel-driver service loader. It could be used to load other service types too by changing the <i>dwServiceType</i> flag on the <i>CreateService</i> call. I threw this together for another project I am currently working on. It is also used in the following post (posting soon).</p>
 It works in the following way:<ul>
 	<li>It is a command line utility which takes 3 arguments:<ol>
-		<li>The service name. Hereby referred to as <b>SERVICE_NAME</b></li>
-		<li>The service display name. Hereby referred to as <b>DISPLAY_NAME</b></li>
-		<li>The driver path (to the .sys file). Hereby referred to as <b>DRIVER_PATH</b></li>
+		<li>The service name. Hereby referred to as <kbd>SERVICE_NAME</kbd></li>
+		<li>The service display name. Hereby referred to as <kbd>DISPLAY_NAME</kbd></li>
+		<li>The driver path (to the .sys file). Hereby referred to as <kbd>DRIVER_PATH</kbd></li>
 	</ol></li>
 	<li>This program (most likely) requires administrative access. There are also some caveats regarding driver code signing requirements that are thoroughly explored elsewhere.</li>
-	<li>It first checks to see if a service already exists with the given <b>SERVICE_NAME</b>. If it does:<ol>
-		<li>If the <b>DISPLAY_NAME</b> matches, the service is kept as is.</li>
-		<li>If the <b>DISPLAY_NAME</b> does not match, the user is prompted on if they want to delete the current service. If they do not, the program exits.</li>
+	<li>It first checks to see if a service already exists with the given <kbd>SERVICE_NAME</kbd>. If it does:<ol>
+		<li>If the <kbd>DISPLAY_NAME</kbd> matches, the service is kept as is.</li>
+		<li>If the <kbd>DISPLAY_NAME</kbd> does not match, the user is prompted on if they want to delete the current service. If they do not, the program exits.</li>
 	</ol></li>
-	<li>If the service needs to be created (it did not already exist or was deleted), it creates the service with the given <b>SERVICE_NAME</b>, <b>DISPLAY_NAME</b>, and <b>DRIVER_PATH</b>. If the service is not created during this run, the <b>DRIVER_PATH</b> is ignored.<br>Note: The <b>DRIVER_PATH</b> must be to a direct local file system file. I have found that network links and symbolic links do not work.</li>
+	<li>If the service needs to be created (it did not already exist or was deleted), it creates the service with the given <kbd>SERVICE_NAME</kbd>, <kbd>DISPLAY_NAME</kbd>, and <kbd>DRIVER_PATH</kbd>. If the service is not created during this run, the <kbd>DRIVER_PATH</kbd> is ignored.<br>Note: The <kbd>DRIVER_PATH</kbd> must be to a direct local file system file. I have found that network links and symbolic links do not work.</li>
 	<li>The service is started up:<ul>
 		<li>If it is already running, the user is prompted on if they want to stop the currently running service. If they say no, the program exits.</li>
 	</ul></li>

@@ -10,7 +10,7 @@ Tags: Examples, Legacy Technology, Migrate, MySQL, MySQLi, PHP, Programming hack
 	<li>From the command line, run <code>pecl install runkit</code></li>
 	<li>Add <code>extension=runkit.so</code> and <code>runkit.internal_override=On</code> to the php.ini</li>
 </ol><br>
-<p>Besides the ability to override these functions with wrappers, I also needed a way to make sure this file was always loaded before all other PHP files. The simple solution for that is adding <code>auto_prepend_file=<b>/PATH/TO/FILE</b></code> to the “.user.ini” in the user’s root web directory.</p>
+<p>Besides the ability to override these functions with wrappers, I also needed a way to make sure this file was always loaded before all other PHP files. The simple solution for that is adding <code>auto_prepend_file=<kbd>/PATH/TO/FILE</kbd></code> to the “.user.ini” in the user’s root web directory.</p>
 <p>The code for this script is as follows. It only contains a limited set of the MySQL functions, including some very esoteric ones that the web site used. This is not a foolproof script, but it gets the job done.</p><br>
 </div>
 

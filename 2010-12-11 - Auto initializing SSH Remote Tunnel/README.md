@@ -30,11 +30,11 @@ The parts of the command that create the SSH tunnel are as follows:
 <table class=SSHTunnelTable>
 	<tr><th>Part of Command										</th><th>Description</th></tr>
 	<tr><td>ssh													</td><td>The OpenSSH client application</td></tr>
-	<tr><td><b><u>USERNAME</u></b>@<b><u>PROXYSERVER</u></b>	</td><td>The proxy server and username on said server to connect to</td></tr>
+	<tr><td><kbd>USERNAME</kbd>@<kbd>PROXYSERVER</kbd>			</td><td>The proxy server and username on said server to connect to</td></tr>
 	<tr><td>-o ExitOnForwardFailure=yes							</td><td>Automatically terminate the SSH session if the remote port forward fails</td></tr>
 	<tr><td>-o TCPKeepAlive=yes<br>-o ServerAliveCountMax=2<br>-o ServerAliveInterval=10		</td><td>Make sure the SSH connection is working, and if not, reinitialize it. The connection fails if server keepalive packets that are sent every 10 seconds are not received twice in a row, or if TCP protocol keepalive fails</td></tr>
 	<tr><td>-N													</td><td>“Do not execute a remote command.  This is useful for just forwarding ports” (This means no interactive shell is run)</td></tr>
-	<tr><td>-R <b><u>PROXYPORT</u></b>:localhost:22				</td><td>Establish a port of <b><u>PROXYPORT</u></b> on the proxy server that sends all data to port 22 (ssh) on the client (localhost)</td></tr>
+	<tr><td>-R <kbd>PROXYPORT</kbd>:localhost:22				</td><td>Establish a port of <kbd>PROXYPORT</kbd> on the proxy server that sends all data to port 22 (ssh) on the client (localhost)</td></tr>
 	<tr><td>&>> TUNNEL_LOG										</td><td>Send all output from both stdin and stderr to the log file “TUNNEL_LOG”</td></tr>
 </table><br>
 
@@ -46,7 +46,7 @@ The parts of the command that create the SSH tunnel are as follows:
 <p>The next step is to create a daemon that calls this script. The normal method for this in Linux would be to use <i>inittab</i>. This can be a bit cumbersome though with Linux distributions that use upstart, like Ubuntu, so I just cheated in it and created the following script to initialize a daemon through rc.d:</p>
 </div>
 
-Fill in variables: <b>USERNAME</b>, <b>PROXYSERVER</b>, <b>PROXYPORT</b>, <b>TUNNEL_SCRIPT_PATH</b>, <b>TUNNEL_SCRIPT_DIRECTORY</b>, <b>TUNNEL_SCRIPT_EXECUTABLE</b>, <b>TUNNEL_SCRIPT_SERVICE_NAME</b>
+Fill in variables: <kbd>USERNAME</kbd>, <kbd>PROXYSERVER</kbd>, <kbd>PROXYPORT</kbd>, <kbd>TUNNEL_SCRIPT_PATH</kbd>, <kbd>TUNNEL_SCRIPT_DIRECTORY</kbd>, <kbd>TUNNEL_SCRIPT_EXECUTABLE</kbd>, <kbd>TUNNEL_SCRIPT_SERVICE_NAME</kbd>
 ```bash
 #!/bin/bash
 echo -e '#!/bin/bash\nfor ((;;))\ndo\n  ssh USERNAME@PROXYSERVER -o TCPKeepAlive=yes -o ExitOnForwardFailure=yes -o ServerAliveCountMax=2 -o ServerAliveInterval=10 -N -R PROXYPORT:localhost:22 &>> TUNNEL_LOG\n  echo "Restarting: " `date` >> TUNNEL_LOG\n  sleep 1\ndone' > TUNNEL_SCRIPT_PATH #This creates the above script

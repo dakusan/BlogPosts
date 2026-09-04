@@ -16,7 +16,7 @@ Tags: Amazon, AMIs, AWS, CentOS, Cloud, EC2, Examples, Servers, SSH<br><br>
 			<li>When changing configurations for the auto scalar, if and when your instances are terminated and recreated, this instance will always be available on the load balancer, so there is no downtime.</li>
 			<li>This instance can act as a central repository for other instances to sync from.</li>
 		</ol>
-		So make sure this instance has an elastic IP assigned to it. From here on out, we will refer to this instance as <b><i>PrimaryInstance</i></b> (you can set this physically in the host file, or change it in all scripts to however you want to refer to your elastic IP [most likely through a DNS domain]).
+		So make sure this instance has an elastic IP assigned to it. From here on out, we will refer to this instance as <kbd>PrimaryInstance</kbd> (you can set this physically in the host file, or change it in all scripts to however you want to refer to your elastic IP [most likely through a DNS domain]).
 	</li><li>
 		Create your ssh private key for the instances: (For all prompts, use default settings)
 		<br><code>ssh-keygen -t rsa -b 4096 -C "your_email@example.com"</code>
@@ -25,10 +25,10 @@ Tags: Amazon, AMIs, AWS, CentOS, Cloud, EC2, Examples, Servers, SSH<br><br>
 		<br><code>cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys</code>
 	</li><li>
 		Make sure your ssh known_hosts includes your primary instance, so all future ssh calls to it are automatically accept it as a known host:
-		<br><code>ssh <b><i>PrimaryInstance</i></b> -o StrictHostKeyChecking=no</code><br>
+		<br><code>ssh <kbd>PrimaryInstance</kbd> -o StrictHostKeyChecking=no</code><br>
 		You do not have to finish the login process. This just makes sure our primary instance will be recognized by other instances.
 	</li><li>
-		Turn on <b><i>PermitRootLogin</i></b> in /etc/ssh/sshd_config and reload the sshd config <code>service sshd reload</code><br>
+		Turn on <kbd>PermitRootLogin</kbd> in /etc/ssh/sshd_config and reload the sshd config <code>service sshd reload</code><br>
 		I just recommend this because it makes life way, way easier. The scripts below assume that you did this.
 	</li>
 </ul><br>
@@ -55,15 +55,15 @@ Notes:<br>
 You may not want to do this. It was just required by my client in this case.<br>
 This is required in the startup script because Amazon likes to mess with the sshd_config (and authorized_keys) in new instances it boots.<br><br>
 
-### Sync SSH settings from the <b><i>PrimaryInstance</i></b>
-<pre><code>#Remove the known_hosts file, in case something on the <b><i>PrimaryInstance</i></b> has changed that would block ssh commands.
+### Sync SSH settings from the <kbd>PrimaryInstance</kbd>
+<pre><code>#Remove the known_hosts file, in case something on the <kbd>PrimaryInstance</kbd> has changed that would block ssh commands.
 rm -f ~/.ssh/known_hosts
 
-#Sync the SSH settings from the <b><i>PrimaryInstance</i></b>
-rsync -e 'ssh -o StrictHostKeyChecking=no' -a root@<b><i>PrimaryInstance</i></b>:~/.ssh/ ~/.ssh/</code></pre>
+#Sync the SSH settings from the <kbd>PrimaryInstance</kbd>
+rsync -e 'ssh -o StrictHostKeyChecking=no' -a root@<kbd>PrimaryInstance</kbd>:~/.ssh/ ~/.ssh/</code></pre>
 
-### Sync required files from the <b><i>PrimaryInstance</i></b>. In this case, the default web root folder
-<pre><code>rsync -at root@<b><i>PrimaryInstance</i></b>:/var/www/html/ /var/www/html/</code></pre>
+### Sync required files from the <kbd>PrimaryInstance</kbd>. In this case, the default web root folder
+<pre><code>rsync -at root@<kbd>PrimaryInstance</kbd>:/var/www/html/ /var/www/html/</code></pre>
 
 <p>That's it for the things that need to be configured/added to the instance. From there, create your AMI and launch config, and create/modify your launch group and load balancer.</p><br>
 
