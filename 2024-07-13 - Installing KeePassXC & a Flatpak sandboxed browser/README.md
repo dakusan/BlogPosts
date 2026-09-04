@@ -17,7 +17,7 @@ Tags: Chrome, Diagnosing, Firefox, Flatpak, KeePass, KeePassXC, Linux, Linux Mig
 		<ins>Run the relevant below environment variables in your command shell before running the commands in the following steps:</ins><br>
 </li></ol>
 
-<pre><ins>#Shared environment variables:</ins>
+<pre><code><ins>#Shared environment variables:</ins>
 KP_CUSTOM=/home/<kbd>$USER</kbd>/keepass-browser
 KP_JSON_NAME=org.keepassxc.keepassxc_browser.json
 
@@ -29,7 +29,7 @@ KP_JSON_END=~/.var/app/<kbd>$KP_FLATPAK_PACKAGE</kbd>/config/chromium/NativeMess
 <ins>#Firefox environment variables:</ins>
 KP_FLATPAK_PACKAGE=org.mozilla.firefox
 KP_JSON_START=~/.mozilla/native-messaging-hosts
-KP_JSON_END=~/.var/app/<kbd>$KP_FLATPAK_PACKAGE</kbd>/.mozilla/native-messaging-hosts</pre>
+KP_JSON_END=~/.var/app/<kbd>$KP_FLATPAK_PACKAGE</kbd>/.mozilla/native-messaging-hosts</code></pre>
 
 <ol start=2>
 	<li>
@@ -47,7 +47,7 @@ KP_JSON_END=~/.var/app/<kbd>$KP_FLATPAK_PACKAGE</kbd>/.mozilla/native-messaging-
 		<ins>Set up the needed files in the sandbox:</ins><br>
 </li></ol>
 
-<pre><ins>#Put KeePass proxy and needed library files in user directory</ins>
+<pre><code><ins>#Put KeePass proxy and needed library files in user directory</ins>
 mkdir -p <kbd>$KP_CUSTOM</kbd>/lib
 mkdir -p <kbd>$KP_JSON_END</kbd> #Needed for firefox
 cp /usr/bin/keepassxc-proxy <kbd>$KP_CUSTOM</kbd>/
@@ -55,15 +55,13 @@ rsync -a /usr/lib/x86_64-linux-gnu/libicudata* /usr/lib/x86_64-linux-gnu/libicuu
 
 <ins>#Copy the JSON file to the Flatpak app directory and change the executable path in the file</ins>
 cp <kbd>$KP_JSON_START</kbd>/<kbd>$KP_JSON_NAME</kbd> <kbd>$KP_JSON_END</kbd>/
-sed -i "s/\/usr\/bin\//"$(echo <kbd>$KP_CUSTOM</kbd> | sed 's_/_\\/_g')"\//" <kbd>$KP_JSON_END</kbd>/<kbd>$KP_JSON_NAME</kbd></pre>
+sed -i "s/\/usr\/bin\//"$(echo <kbd>$KP_CUSTOM</kbd> | sed 's_/_\\/_g')"\//" <kbd>$KP_JSON_END</kbd>/<kbd>$KP_JSON_NAME</kbd></code></pre>
 
 <ol start=4>
 	<li>
 		<ins>Add permissions to the Flatpak:</ins><br>
 </li></ol>
 
-<pre>
-flatpak override --user --filesystem=<kbd>$KP_CUSTOM</kbd>:ro <kbd>$KP_FLATPAK_PACKAGE</kbd> #Only required if home directory is not shared to the Flatpak
+<pre><code>flatpak override --user --filesystem=<kbd>$KP_CUSTOM</kbd>:ro <kbd>$KP_FLATPAK_PACKAGE</kbd> #Only required if home directory is not shared to the Flatpak
 flatpak override --user --filesystem=xdg-run/org.keepassxc.KeePassXC.BrowserServer:ro <kbd>$KP_FLATPAK_PACKAGE</kbd>
-flatpak override --user --env=LD_LIBRARY_PATH=$(flatpak info --show-permissions <kbd>$KP_FLATPAK_PACKAGE</kbd> | grep -oP '(?<=LD_LIBRARY_PATH=).*')";<kbd>$KP_CUSTOM</kbd>/lib" <kbd>$KP_FLATPAK_PACKAGE</kbd>
-</pre>
+flatpak override --user --env=LD_LIBRARY_PATH=$(flatpak info --show-permissions <kbd>$KP_FLATPAK_PACKAGE</kbd> | grep -oP '(?<=LD_LIBRARY_PATH=).*')";<kbd>$KP_CUSTOM</kbd>/lib" <kbd>$KP_FLATPAK_PACKAGE</kbd></code></pre>

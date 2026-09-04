@@ -12,10 +12,10 @@ Tags: Plex<br><br>
 ```
 
 <ins>Force library intro dection</ins>
-<pre>'/usr/lib/plexmediaserver/Plex Media Scanner' --analyze --manual --server-action intros --section <kbd>LIBRARY_ID</kbd></pre>
+<pre><code>'/usr/lib/plexmediaserver/Plex Media Scanner' --analyze --manual --server-action intros --section <kbd>LIBRARY_ID</kbd></code></pre>
 
 <ins>Force library credit dection</ins>
-<pre>'/usr/lib/plexmediaserver/Plex Media Scanner' --analyze --manual --server-action credits --section <kbd>LIBRARY_ID</kbd></pre><br>
+<pre><code>'/usr/lib/plexmediaserver/Plex Media Scanner' --analyze --manual --server-action credits --section <kbd>LIBRARY_ID</kbd></code></pre><br>
 
 <ins>Export media list</ins> (this is a bash command)
 

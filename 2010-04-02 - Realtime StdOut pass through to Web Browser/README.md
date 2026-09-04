@@ -301,9 +301,8 @@ This could very easily be converted to another better [less resource intensive] 
 		<ul>
 			<li>
 				In your [bash] command shell, execute the following
-				<code>
-Server/FlashSocketPolicy.pl & #Run the Flash Policy Server as a daemon. Don't forget <b>sudo</b> in Linux
-./inc | ./PassThruServer #Pipe <b>inc</b> out to the <b>PassThruServer</b></code>
+<pre><code>Server/FlashSocketPolicy.pl & #Run the Flash Policy Server as a daemon. Don't forget <b>sudo</b> in Linux
+./inc | ./PassThruServer #Pipe <b>inc</b> out to the <b>PassThruServer</b></code></pre>
 			</li>
 			<li>Note that this will immediately start the PassThruServer receiving information from “inc”, so if you don’t get the client up in time, it may already be done counting and send you all the info at once (25 seconds).</li>
 			<li>

@@ -12,10 +12,10 @@ Tags: Chrome, Data Passing, Diagnosing, Linux, Linux Migration, Password Manager
 <p>The chrome extension talks to its parent, <b>rf-chrome-nm-host.exe</b>, through the <a href="https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging">native messaging API</a>. To direct the extension to talk to the windows executable you have to edit <code>~/.config/chromium/NativeMessagingHosts/com.siber.roboform.json</code> and change the <b>path</b> inside it to <code>/home/<b>USERNAME</b>/chrome-robo.sh</code>, a script file that you will create. You can’t link directly to the <b>rf-chrome-nm-host.exe</b> because it has to be run through Wine, and the <b>path</b> cannot contain arguments.</p>
 <p>Create a file with executable permissions at <code>~/chrome-robo.sh</code> and set its contents to:</p>
 
-<pre>
+<pre><code>
 cd "/home/<kbd>USERNAME</kbd>/.wine/drive_c/Program Files (x86)/Siber Systems/AI RoboForm/9.6.1.1/";
 /usr/bin/wine ./rf-chrome-nm-host.exe chrome-extension://pnlccmojcmeohlpggmfnbbiapkmbliob/ --parent-window=0
-</pre>
+</code></pre>
 
 # Part 2: Debugging why it isn’t working
 <p>It should have worked at this point, but it still wasn’t, so I had to go further into debug mode. The full copy of the C source code can be found at the bottom of this post. Make sure to replace <b>USERNAME</b> in the source (and instructions in this post) with your username, as using “~” to specify your home directory often doesn’t work in this setup. You may also need to replace version numbers (9.6.1.1 for this post).</p>
@@ -28,14 +28,14 @@ cd "/home/<kbd>USERNAME</kbd>/.wine/drive_c/Program Files (x86)/Siber Systems/AI
 # Part 3: Trying with windows
 <p>I next decided to see if I could get the chromium extension to play nicely by talking directly to the <b>rf-chrome-nm-host.exe</b> on my Windows machine via an SSH tunnel. To do this, I changed the <code>char *cmd[]=</code> line to:</p>
 
-<pre>
+<pre><code>
 char *cmd[]={
   "/usr/bin/ssh",
   "<kbd>USERNAME</kbd>@<kbd>HOSTNAME</kbd>",
   "cd c:/Program\\ Files\\ \\(x86\\)/Siber\\ Systems/AI\\ RoboForm/9.6.1.1; ./rf-chrome-nm-host.exe chrome-extension://pnlccmojcmeohlpggmfnbbiapkmbliob/ --parent-window=0",
   NULL
 };
-</pre>
+</code></pre>
 
 <p>While the first 4 packets succeeded in this setup, the following packets (<code>rf-api-request</code>) were all met with: <code>pipe open error: The system cannot find the file specified.  (error 2)</code>.</p>
 <p>This was another stopping point because debugging this would also have taken too long. Though I did do some initial testing using <a href="https://learn.microsoft.com/en-us/sysinternals/downloads/procmon">Process Monitor</a> and handle lookups in <a href="https://learn.microsoft.com/en-us/sysinternals/downloads/process-explorer">Process Explorer</a>.</p><br>

@@ -63,7 +63,7 @@ rm -f ~/.ssh/known_hosts
 rsync -e 'ssh -o StrictHostKeyChecking=no' -a root@<b><i>PrimaryInstance</i></b>:~/.ssh/ ~/.ssh/</code></pre>
 
 ### Sync required files from the <b><i>PrimaryInstance</i></b>. In this case, the default web root folder
-<code>rsync -at root@<b><i>PrimaryInstance</i></b>:/var/www/html/ /var/www/html/</code>
+<pre><code>rsync -at root@<b><i>PrimaryInstance</i></b>:/var/www/html/ /var/www/html/</code></pre>
 
 <p>That's it for the things that need to be configured/added to the instance. From there, create your AMI and launch config, and create/modify your launch group and load balancer.</p><br>
 
