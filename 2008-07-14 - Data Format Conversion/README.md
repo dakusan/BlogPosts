@@ -10,10 +10,10 @@ Tags: Data Passing, Examples, MySQL, PHP<br><br>
 <p>Next, we need to turn each row into the format “('FIELD1','FIELD2','FIELD3',<b style="color:red">...</b>),”. Four regular expressions are needed to format the data:</p>
 <link href="layoutx/RegularExpressions.css" rel=stylesheet type="text/css">
 <table class=SpaceTable><tr><th>Search</th><th>Replace</th><th>Explanation</th></tr>
-<tr><td>'</td><td><span class=REReplaceSp>\\</span>'</td><td>Escape single quotes</td></tr>
-<tr><td><span class=REEscape>\t</span></td><td>','</td><td>Separate fields and quote as strings</td></tr>
-<tr><td><span class=RESpecial>^</span></td><td>('</td><td>Start of row</td></tr>
-<tr><td><span class=RESpecial>$</span></td><td>'),</td><td>End of row</td></tr>
+<tr><td>'</td><td><code>\\</code>'</td><td>Escape single quotes</td></tr>
+<tr><td><code>\t</code></td><td>','</td><td>Separate fields and quote as strings</td></tr>
+<tr><td><code>^</code></td><td>('</td><td>Start of row</td></tr>
+<tr><td><code>$</code></td><td>'),</td><td>End of row</td></tr>
 </table>
 From there, there are only 2 more steps to complete the query.
 <ul>

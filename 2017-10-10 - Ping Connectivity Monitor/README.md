@@ -6,7 +6,7 @@ Tags: Bash, Command Line Utility, Cygwin, Examples, Ping<br><br>
 
 <p>The following is a simple bash script to ping a different domain once a second and log the output. By default, it pings #.castledragmire.com, where # is an incrementing number starting from 0.</p>
 <p>The script is written for Cygwin (See the PING_COMMAND variable at the top) but is very easily adaptable to Linux.</p>
-<p>The log output is: <span class=code style="margin-left:0"><kbd>EPOCH_TIMESTAMP</kbd> <kbd>DOMAIN</kbd> <kbd>PING_OUTPUT</kbd></span></p><br>
+<p>The log output is: <code><kbd>EPOCH_TIMESTAMP</kbd> <kbd>DOMAIN</kbd> <kbd>PING_OUTPUT</kbd></code></p><br>
 
 ```bash
 #This uses Window's native ping since the Cygwin ping is sorely lacking in options

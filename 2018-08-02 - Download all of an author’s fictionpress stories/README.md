@@ -4,7 +4,7 @@ Date: 2018-08-02<br>
 Tags: Examples, Fanfiction, Fictionpress, GrabAll, HTML, JavaScript, Quick Fixes, Web, Web browsers<br><br>
 
 <p>I was surprised in my failure to find a script online to download all of an author’s stories from <a href="https://www.fictionpress.com">Fiction Press</a> or <a href="http://fanfiction.net">Fan Fiction.Net</a>, so I threw together the below.</p>
-<p>If you go to an author’s page in a browser (only tested in Chrome) it should have all of their stories, and you can run the following script in the console (F12) to grab them all. Their save name format is <span class=code style="margin:0"><kbd>STORY_NAME_LINK_FORMAT</kbd> - <kbd>CHAPTER_NUMBER</kbd>.html</span>. It works as follows:</p>
+<p>If you go to an author’s page in a browser (only tested in Chrome) it should have all of their stories, and you can run the following script in the console (F12) to grab them all. Their save name format is <code><kbd>STORY_NAME_LINK_FORMAT</kbd> - <kbd>CHAPTER_NUMBER</kbd>.html</code>. It works as follows:</p>
 <ol>
 	<li>Gathers all of the names, chapter 1 links, and chapter counts for each story.</li>
 	<li>Converts this information into a list of links it needs to download. The links are formed by using the chapter 1 link, and just replacing the chapter number.</li>

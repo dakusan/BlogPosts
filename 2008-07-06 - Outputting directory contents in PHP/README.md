@@ -30,9 +30,10 @@ function ListContents($DirName)
 <div>
 
 It wouldn’t be a bad idea to turn off PHP’s “output buffering” and on “implicit flush” when running something like this for larger directories.<br>
-<span class=ToggleText>Example output for “ListContents('c:\\temp');”:</span><div class=HideText>
+<hr>
+Example output for “ListContents('c:\\temp');”:
 <ul><li>A.BMP [230]</li><li>Dir1 [D]<ul><li>codeblocks-1.0rc2_mingw.exe [13,597,181]</li><li>Dir1a [D]<ul><li>DEBUGUI.C [25,546]</li></ul></li></ul></li><li>Dir2 [D]<ul></ul></li><li>Dir3 [D]<ul><li>HW.C [12,009]</li><li>INIFILE.C [9,436]</li></ul></li><li>NTDETECT.COM [47,564]</li></ul>
-</div><br><br>
+<hr>
 
 I decided to make it a little nicer afterwards by <b>bolding</b> the directories, adding their total size, and changing sizes to a human readable format. This function is a lot more memory intensive because it holds data in strings instead of immediately outputting.<br>
 </div>
@@ -77,9 +78,10 @@ function ListContents2($DirName, &$RetSize)
 
 <div>
 
-<span class=ToggleText>Example output for “print ListContents2('c:\\temp', $Dummy);”:</span><div class=HideText>
+<hr>
+Example output for “print ListContents2('c:\\temp', $Dummy);”:
 <ul><li>A.BMP [230 Bytes]</li><li><b>Dir1</b> [12.99 MB]<ul><li>codeblocks-1.0rc2_mingw.exe [12.97 MB]</li><li><b>Dir1a</b> [24.95 KB]<ul><li>DEBUGUI.C [24.95 KB]</li></ul></li></ul></li><li><b>Dir2</b> [0 Bytes]<ul></ul></li><li><b>Dir3</b> [20.94 KB]<ul><li>HW.C [11.73 KB]</li><li>INIFILE.C [9.21 KB]</li></ul></li><li>NTDETECT.COM [46.45 KB]</li></ul>
-</div><br><br>
+<hr>
 
 The memory problem can be rectified through a little extra IO by calculating the size of a directory before its contents is listed, thereby not needing to keep everything in a string.<br>
 </div>
@@ -120,8 +122,9 @@ function ListContents3($DirName)
 
 <div>
 
-<span class=ToggleText>Example output: for “ListContents3('c:\\temp');”:</span><div class=HideText>
+<hr>
+Example output: for “ListContents3('c:\\temp');”:
 <ul><li>A.BMP [230 Bytes]</li><li><b>Dir1</b> [12.99 MB]<ul><li>codeblocks-1.0rc2_mingw.exe [12.97 MB]</li><li><b>Dir1a</b> [24.95 KB]<ul><li>DEBUGUI.C [24.95 KB]</li></ul></li></ul></li><li><b>Dir2</b> [0 Bytes]<ul></ul></li><li><b>Dir3</b> [20.94 KB]<ul><li>HW.C [11.73 KB]</li><li>INIFILE.C [9.21 KB]</li></ul></li><li>NTDETECT.COM [46.45 KB]</li></ul>
-</div><br><br>
+<hr>
 
 Of course, after all this, my friend took the original advice I gave him before writing any of this code, which was that using <a href="https://www.castledragmire.com/Posts/Useful_Bash_commands_and_scripts">bash commands</a> might get him to his original goal much easier.</div>
