@@ -23,7 +23,7 @@ See <a href="http://technet.microsoft.com/en-us/library/cc753194%28v=ws.10%29.as
 </ul>
 This handles the problem a little more directly than my <a href="../2010-12-04 - Symlinks in a Windows programming environment">other post on the topic ("Symlinks in a Windows programming environment")</a>.
 
-<br><br><b><u>[Edit on 2016-01-12 @ 12:34am]</u></b><br>
+<br><br><b><ins>[Edit on 2016-01-12 @ 12:34am]</ins></b><br>
 And once again, I have a new version of the code. This version has the following advantages:
 <ul>
 	<li>No longer limited to just 4 extra parameters (dynamic instead of static)</li>

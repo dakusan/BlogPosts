@@ -1,7 +1,8 @@
 <div>
 Original Post: <a href="https://www.castledragmire.com/Posts/Format_Text_%5Bto_HTML%5D_Script">Format Text [to HTML] Script</a><br>
 Date: 2014-10-10<br>
-Tags: Convert, Formats, HTML<br><br>
+Tags: Convert, Formats, HTML
+</div><br>
 
 <p>After writing the documentation in plaintext format for <a href="https://www.github.com/dakusan/DSQL">DSQL</a> just now, I needed to convert it into HTML for the project’s page. I’ve done this before manually and it’s always very daunting, so I decided to really quickly write a script to do most of the work for me, which can be downloaded <a href="FormatText.php">here</a>, or the code seen below. Unfortunately I do not have a live version as that would allow XSS.</p>
 It has the following:
@@ -35,15 +36,13 @@ would become:
 </blockquote>
 		</li>
 	</ul></li>
-</ul><br><br>
+</ul>
 
-<p>I realized while making the script that I should probably instead just start making my documentation in a markup (like <a href="https://help.github.com/articles/github-flavored-markdown/">GitHub’s</a>) and then have that converted to HTML and text files. Oh well.</p><br><Br>
+<p>I realized while making the script that I should probably instead just start making my documentation in a markup (like <a href="https://help.github.com/articles/github-flavored-markdown/">GitHub’s</a>) and then have that converted to HTML and text files. Oh well.</p><br>
 
 <p><b>Edit on 2026-07-19</b>: This has basically been superseded by my <a href="https://github.com/dakusan/MarkDown-To-Nexus-BBCode-and-HTML">MarkDown To Nexus BBCode and HTML</a> project.</p>
 
-<u><font size="+2">Code:</font></u>
-</div>
-
+## Code
 ```php
 <? header('Content-Type: text/html; charset=utf-8'); ?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">

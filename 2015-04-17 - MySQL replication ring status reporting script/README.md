@@ -2,6 +2,7 @@
 Original Post: <a href="https://www.castledragmire.com/Posts/MySQL_replication_ring_status_reporting_script">MySQL replication ring status reporting script</a><br>
 Date: 2015-04-17<br>
 Tags: Master, MySQL, Replication, Reporting, Ring, Servers, Status<br><br>
+</div>
 
 <p>I just threw together a quick script to report status on a MySQL replication ring. While replication rings have been the only real multi-master MySQL solution for replication (with the ability for nodes to go down without majorly breaking things) until recently, I have read that MariaDB (still not MySQL) now allows a slave to have multiple masters, meaning many replication topologies are now possible (star, mesh, etc). This script could easily be adapted for those circumstances too.</p>
 <p>This script will report all the variables from “SHOW MASTER STATUS” and “SHOW SLAVE STATUS” from all servers in your replication ring, in a unified table. It also includes a “Pretty Status” row that lets you quickly see how things look. The possibilities for this row are:</p>
@@ -25,8 +26,8 @@ Tags: Master, MySQL, Replication, Reporting, Ring, Servers, Status<br><br>
 </ul>
 <p>The “Seconds_Behind_Master” variable can also be useful for determining the replication ring’s current replication status.</p>
 <p>The code is below the example. The entire source file can also be found <a href="ReplicationStatus.php">here</a>. The 3 variables that need to be configured are at the top of the file. It assumes that all servers are accessible via the single given username and password.</p><br>
-<div><b><u>Example:</u></b></div>
 
+## Example
 <table>
 	<tr><td colspan=3 align=center><b>Master</b></td></tr>
 	<tr><th align=left>Server Name</th><td><b>EXAMPLE1.MYDOMAIN.COM</b></td><td><b>EXAMPLE2</b></td></tr>
@@ -76,11 +77,9 @@ Tags: Master, MySQL, Replication, Reporting, Ring, Servers, Status<br><br>
 	<tr><th align=left>Last_SQL_Error</th><td></td><td></td></tr>
 	<tr><th align=left>Replicate_Ignore_Server_Ids</th><td></td><td><div class=NotGiven>Not given</div></td></tr>
 	<tr><th align=left>Master_Server_Id</th><td>2</td><td><div class=NotGiven>Not given</div></td></tr>
-</table><br><br>
+</table>
 
-</div>
-
-<b><u>Code:</u></b><br>
+## Code
 ```php
 <?
 //Configurations

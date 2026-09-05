@@ -295,7 +295,7 @@ This could very easily be converted to another better [less resource intensive] 
 
 <hr>
 
-<b><u>How to tie all of this together</u></b>
+<b><ins>How to tie all of this together</ins></b>
 <ol>
 	<li>	Start the servers
 		<ul>
