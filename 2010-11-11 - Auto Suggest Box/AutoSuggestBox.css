@@ -1,0 +1,6 @@
+.SuggestionBoxParent { }
+.SuggestionBox { top:20px; z-index:100; background-color:lightgrey; }
+.SuggestionBox div { color:black; overflow-x:hidden; white-space:nowrap; }
+.SuggestionBox div:hover { background-color:blue; }
+.SuggestionBoxHighlight { font-weight: bold; }
+.SuggestBoxSelected { background-color:darkgrey; }
