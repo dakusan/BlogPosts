@@ -1,0 +1,157 @@
+<!--
+/***Dakusan's Embedded Image Drawer - v1.0 http://www.castledragmire.com/Projects/Other_Web_Scripts#DrawImage ***/
+-->
+
+<html>
+<body>
+<form>
+<table onSubmit="return false;" border=1>
+	<tr>
+		<td>Picture Dimensions:</td>
+		<td>Width/Height: <input type=text value=300 id=FracWidthValue style="width:50px"> <input type=text value=200 id=FracHeightValue style="width:50px"></td>
+	</tr>
+	<tr>
+		<td>Quality Iterations:</td>
+		<td><input type=text value=50 id=MaxIterationsValue style="width:50px"></td>
+	</tr>
+	<tr>
+		<td>Viewable Area:</td>
+		<td>
+			<table style=float:left>
+				<tr><td>XMin:</td><td><input type=text id=XMinValue value=-2></td></tr>
+				<tr><td>XMax:</td><td><input type=text id=XMaxValue value=1></td></tr>
+				<tr><td>YMin:</td><td><input type=text id=YMinValue value=-1></td></tr>
+				<tr><td>YMin:</td><td><input type=text id=YMaxValue value=1></td></tr>
+			</table>
+			<table style=float:right>
+				<tr><td></td><td><input type=button onclick="MoveFractal('Y', -1)" value="U"></td><td></td></tr>
+				<tr><td><input type=button onclick="MoveFractal('X', -1)" value="L"></td><td></td><td><input type=button onclick="MoveFractal('X', 1)" value="R"></td></tr>
+				<tr><td></td><td><input type=button onclick="MoveFractal('Y', 1)" value="D"></td><td></td></tr>
+				<tr><td colspan=3 align=center><input type=text id=MovePercent value=20 style="width:25px">%</td></tr>
+			</table>
+		</td>
+	</tr>
+</table>
+<input type=submit onclick="StartRender(); return false" value="Render";><br>
+</form>
+<div id=RenderTag1>-</div>
+Click to zoom in. If in IE, right click to zoom out. Otherwise, hold ctrl while clicking to zoom out.<br>
+If you get Browser unresponsive errors, just click to allow the script to continue.<br>
+<div id=ImageContainer></div>
+<div id=RenderTag2>-</div>
+<script type="text/javascript" src="./DrawImage.js"></script>
+<script type="text/javascript">
+var TheImage=CreateRenderObject('./', 640, 480);
+ImageContainer.appendChild(TheImage);
+ImageClicked=ZoomFractal;
+
+//Global Mandelbrot fractal variables
+var FracWidth, FracHeight; //Window Dimensions
+var XMin, XMax, YMin, YMax; //The X/Y axis min/max points
+var MaxIterations; //Detail Level
+function UpdateVariables() //Pull in all the variables from the text input boxes
+{
+	var ValuesToGrab='FracWidth,FracHeight,XMin,XMax,YMin,YMax,MaxIterations'.split(',');
+	for(var i=0;i<ValuesToGrab.length;i++)
+		window[ValuesToGrab[i]]=parseFloat(document.getElementById(ValuesToGrab[i]+'Value').value);
+}
+
+//Start the rendering of the fractal
+function StartRender()
+{
+	document.getElementById('RenderTag1').innerHTML=document.getElementById('RenderTag2').innerHTML='<font color=red><b>RENDERING</b></font>'; //Set the message that we are rendering
+	setTimeout('DoRender()', 100); //Start the rendering after message is displayed
+}
+
+//Draw and output the fractal
+function DoRender()
+{
+	UpdateVariables();
+	DrawImage(TheImage, FracWidth, FracHeight, DrawFractal());
+	document.getElementById('RenderTag1').innerHTML=document.getElementById('RenderTag2').innerHTML='-'; //Set that we are DONE rendering
+}
+
+//This does the actual fractal drawing into a 1D pixel array
+function DrawFractal()
+{
+	var PixelArray=[];
+	for(var Y=0;Y<FracHeight;Y++)
+		for(var X=0;X<FracWidth;X++)
+		{
+			//Determine point in the 2D fractal plane we are checking
+			var x=(XMax-XMin)*(X/FracWidth)+XMin;
+			var y=(YMax-YMin)*(Y/FracHeight)+YMin;
+
+			//Return the evaluated color for the point
+			PixelArray[Y*FracWidth+X]=EvaluatePoint(x, y);
+		}
+	return PixelArray;
+}
+
+//Evaluate the color of a point in the fractal space
+function EvaluatePoint(x, y)
+{
+	var x0=x, y0=y; //Remember the original coordinate
+
+	//Determine if and when the point breaks out
+	for(var iteration=0; x*x+y*y<=2*2 && iteration<MaxIterations; iteration++)
+	{
+		var xtemp=x*x-y*y+x0;
+		y=2*x*y+y0;
+		x=xtemp;
+	}
+
+	//Assign the color depending on if and when the point breaks out
+	return (iteration == MaxIterations ? 0 : ProcessColor(iteration, x, y, 2, 2)); //Return black if it did not break out
+}
+
+//Determine the color of a pixel based on its state
+function ProcessColor(IterationsToEscape, ValueAtEndReal, ValueAtEndImaginary, BailoutRadius, Power) //Parameters = n, Zn{r}, Zn{i} B, P
+{
+	var State=IterationsToEscape+Math.log(2*Math.log(BailoutRadius))-Math.log(Math.log(Math.sqrt(Math.abs(ValueAtEndReal*ValueAtEndReal+ValueAtEndImaginary*ValueAtEndImaginary))))/Math.log(Power);
+	return parseInt((15-State)/15*255);
+}
+
+//Slide/Translate the fractal by a percentage in a certain direction on the X or Y axis
+function MoveFractal(Axis, Direction)
+{
+	var MinEl=document.getElementById(Axis+'MinValue'), MaxEl=document.getElementById(Axis+'MaxValue'); //Get the minimum and maximum text fields for this axis
+	var AmountToMove=(parseFloat(MaxEl.value)-parseFloat(MinEl.value))*(parseFloat(document.getElementById('MovePercent').value)/100)*Direction; //Determine the amount to move from the min/max, percent values, and Direction
+	MinEl.value=parseFloat(MinEl.value)+AmountToMove; //Update the min value
+	MaxEl.value=parseFloat(MaxEl.value)+AmountToMove; //Update the max value
+	StartRender(); //Rerender the fractal
+}
+
+//Zoom in or out on the fractal when clicked
+function ZoomFractal(X, Y, ZoomOut)
+{
+	Y=FracHeight-Y; //Invert the height since our vertical point system is bottom-up
+	var ScaleX=XMax-XMin, ScaleY=YMax-YMin; //Determine the current window dimensions
+	var NewVals; //The new X/Y Min/Max vals will be stored here
+	if(ZoomOut) //Zoom out
+	{
+		//Determine the center of the window
+		var PointX=.5*ScaleX+XMin;
+		var PointY=YMax-.5*ScaleY;
+
+		//Zoom out around the center of the window
+		NewVals=[PointX-ScaleX*2, PointX+ScaleX*2, PointY-ScaleY*2, PointY+ScaleY*2];
+	}
+	else //Zoom in
+	{
+		//Zoom around the point
+		var PointX=X/FracWidth*ScaleX+XMin;
+		var PointY=YMax-Y/FracHeight*ScaleY;
+		NewVals=[PointX-ScaleX/8, PointX+ScaleX/8, PointY-ScaleY/8, PointY+ScaleY/8];
+	}
+
+	//Set the new window area
+	var ValsToFill=['XMin','XMax','YMin','YMax'];
+	for(var i=0;i<ValsToFill.length;i++)
+		document.getElementById(ValsToFill[i]+'Value').value=NewVals[i];
+
+	StartRender();
+}
+</script>
+</body>
+</html>
