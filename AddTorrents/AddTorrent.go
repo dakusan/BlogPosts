@@ -3,27 +3,68 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"flag"
+	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"html"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
 
-const root = "/home/plex/Needed torrents/"
-const newRoot = "/home/plex/library/"
-const logFile = "/home/plex/.var/app/org.qbittorrent.qBittorrent/data/qBittorrent/logs/qbittorrent.log"
-const listenOn = ":5151"
-const doneDir = root+"DONE/"
+const configFile = "config.json"
+
+//Config holds the settings loaded from configFile at startup
+type Config struct {
+	Root     string `json:"root"`
+	NewRoot  string `json:"newRoot"`
+	ListenOn string `json:"listenOn"`
+	QbitURL  string `json:"qbitURL"`
+	QbitUser string `json:"qbitUser"`
+	QbitPass string `json:"qbitPass"`
+}
+
+var cfg Config
+var doneDir string
+
+//loadConfig reads and parses the JSON config file at path, erroring if it is missing or invalid
+func loadConfig(path string) (Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Config{}, err
+	}
+	var c Config
+	if err := json.Unmarshal(data, &c); err != nil {
+		return Config{}, err
+	}
+	return c, nil
+}
+
+//validateConfig errors if any required field (after config file + flag overrides are merged) is still empty
+func validateConfig(c Config) error {
+	required := []struct{ name, value string }{
+		{"root", c.Root}, {"newRoot", c.NewRoot}, {"listenOn", c.ListenOn},
+		{"qbitURL", c.QbitURL}, {"qbitUser", c.QbitUser}, {"qbitPass", c.QbitPass},
+	}
+	for _, f := range required {
+		if f.value == "" {
+			return fmt.Errorf("missing required field %q", f.name)
+		}
+	}
+	return nil
+}
 
 type LogWriter struct {
 	Buffer bytes.Buffer
@@ -40,7 +81,296 @@ func (lw *LogWriter) Write(p []byte) (int, error) {
 	return os.Stderr.Write(p)
 }
 
+//qbitClient holds the authenticated session (cookie jar) used to talk to the qBittorrent WebUI API; guarded by qbitClientMu since it's read/written from multiple goroutines
+var (
+	qbitClientMu sync.Mutex
+	qbitClient   *http.Client
+)
+
+//qbitConnected tracks whether the last login/request succeeded, so transitions (lost/regained) can be logged without spamming on every retry
+var (
+	qbitStateMu   sync.Mutex
+	qbitConnected bool
+)
+
+//qbitMarkConnected flips the connection state to connected, logging only if it was previously down
+func qbitMarkConnected() {
+	qbitStateMu.Lock()
+	wasConnected := qbitConnected
+	qbitConnected = true
+	qbitStateMu.Unlock()
+	if !wasConnected {
+		log.Println("Connected to qbittorrent WebUI")
+	}
+}
+
+//qbitMarkDisconnected flips the connection state to disconnected, logging only if it was previously up
+func qbitMarkDisconnected(err error) {
+	qbitStateMu.Lock()
+	wasConnected := qbitConnected
+	qbitConnected = false
+	qbitStateMu.Unlock()
+	if wasConnected {
+		log.Println("Lost connection to qbittorrent WebUI: " + err.Error())
+	}
+}
+
+//qbitMonitor keeps the qBittorrent WebUI session alive, retrying the login every 15 seconds while disconnected
+func qbitMonitor() {
+	for {
+		qbitStateMu.Lock()
+		connected := qbitConnected
+		qbitStateMu.Unlock()
+
+		if !connected {
+			qbitLogin()
+		}
+		time.Sleep(15 * time.Second)
+	}
+}
+
+//qbitLogin authenticates against the qBittorrent WebUI and stores the resulting session cookie in qbitClient
+func qbitLogin() error {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		qbitMarkDisconnected(err)
+		return err
+	}
+	client := &http.Client{Jar: jar}
+
+	resp, err := client.PostForm(cfg.QbitURL+"/api/v2/auth/login", url.Values{
+		"username": {cfg.QbitUser},
+		"password": {cfg.QbitPass},
+	})
+	if err != nil {
+		qbitMarkDisconnected(err)
+		return err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if strings.TrimSpace(string(body)) != "Ok." {
+		err := fmt.Errorf("login rejected (status %d): %s", resp.StatusCode, string(body))
+		qbitMarkDisconnected(err)
+		return err
+	}
+
+	qbitClientMu.Lock()
+	qbitClient = client
+	qbitClientMu.Unlock()
+	qbitMarkConnected()
+	return nil
+}
+
+//qbitDo performs an authenticated request built by makeReq, transparently logging back in and retrying once if the session expired (403)
+func qbitDo(makeReq func() (*http.Request, error)) (*http.Response, error) {
+	qbitClientMu.Lock()
+	client := qbitClient
+	qbitClientMu.Unlock()
+	if client == nil {
+		return nil, fmt.Errorf("not connected to qbittorrent WebUI")
+	}
+
+	req, err := makeReq()
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		qbitMarkDisconnected(err)
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		qbitMarkConnected()
+		return resp, nil
+	}
+	resp.Body.Close()
+
+	//Session expired; log back in and retry once
+	if err := qbitLogin(); err != nil {
+		return nil, err
+	}
+	qbitClientMu.Lock()
+	client = qbitClient
+	qbitClientMu.Unlock()
+
+	req, err = makeReq()
+	if err != nil {
+		return nil, err
+	}
+	resp, err = client.Do(req)
+	if err != nil {
+		qbitMarkDisconnected(err)
+		return nil, err
+	}
+	qbitMarkConnected()
+	return resp, nil
+}
+
+//qbitAddTorrent uploads the .torrent file at torrentPath to qBittorrent via the WebUI API, saving to savePath and tagging it with tag
+func qbitAddTorrent(torrentPath, savePath, tag string) error {
+	resp, err := qbitDo(func() (*http.Request, error) {
+		file, err := os.Open(torrentPath)
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
+
+		var buf bytes.Buffer
+		mw := multipart.NewWriter(&buf)
+		part, err := mw.CreateFormFile("torrents", filepath.Base(torrentPath))
+		if err != nil {
+			return nil, err
+		}
+		if _, err := io.Copy(part, file); err != nil {
+			return nil, err
+		}
+		mw.WriteField("savepath", savePath)
+		mw.WriteField("autoTMM", "false")
+		mw.WriteField("tags", tag)
+		if err := mw.Close(); err != nil {
+			return nil, err
+		}
+
+		req, err := http.NewRequest("POST", cfg.QbitURL+"/api/v2/torrents/add", &buf)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", mw.FormDataContentType())
+		return req, nil
+	})
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK || strings.TrimSpace(string(body)) != "Ok." {
+		return fmt.Errorf("add rejected (status %d): %s", resp.StatusCode, string(body))
+	}
+	return nil
+}
+
+//qbitTorrentInfo mirrors the fields we need from the qBittorrent WebUI's /api/v2/torrents/info response
+type qbitTorrentInfo struct {
+	Progress float64 `json:"progress"`
+	Eta      int64   `json:"eta"`
+}
+
+//qbitTorrentByTag looks up the (single) torrent with the given unique tag, returning nil if none is found
+func qbitTorrentByTag(tag string) (*qbitTorrentInfo, error) {
+	resp, err := qbitDo(func() (*http.Request, error) {
+		return http.NewRequest("GET", cfg.QbitURL+"/api/v2/torrents/info?tag="+url.QueryEscape(tag), nil)
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var infos []qbitTorrentInfo
+	if err := json.NewDecoder(resp.Body).Decode(&infos); err != nil {
+		return nil, err
+	}
+	if len(infos) == 0 {
+		return nil, nil
+	}
+	return &infos[0], nil
+}
+
+//pendingTorrent tracks a torrent added to qBittorrent whose progress is still shown on the log page
+type pendingTorrent struct {
+	tag    string
+	name   string
+	misses int //consecutive failed/not-found lookups, used to eventually give up on stale entries
+}
+
+var (
+	pendingMu sync.Mutex
+	pending   []pendingTorrent
+)
+
+//addPending registers a newly-added torrent so its progress is shown on the log page until it finishes
+func addPending(tag, name string) {
+	pendingMu.Lock()
+	defer pendingMu.Unlock()
+	pending = append(pending, pendingTorrent{tag: tag, name: name})
+}
+
+//formatEta renders a qBittorrent eta (seconds, or 8640000 for "unknown") as a human-readable duration
+func formatEta(seconds int64) string {
+	if seconds < 0 || seconds >= 8640000 {
+		return "unknown"
+	}
+	return (time.Duration(seconds) * time.Second).Round(time.Second).String()
+}
+
+//pendingStatusLines queries qBittorrent for the live progress/ETA of every pending torrent, dropping any that have finished or gone stale
+func pendingStatusLines() []string {
+	pendingMu.Lock()
+	snapshot := append([]pendingTorrent(nil), pending...)
+	pendingMu.Unlock()
+
+	var lines []string
+	var stillPending []pendingTorrent
+	for _, p := range snapshot {
+		info, err := qbitTorrentByTag(p.tag)
+		if err != nil || info == nil {
+			p.misses++
+			if p.misses < 5 {
+				stillPending = append(stillPending, p)
+				lines = append(lines, fmt.Sprintf("Waiting: %s - status unknown", p.name))
+			} else {
+				log.Println("Gave up tracking progress for: ", p.name)
+			}
+			continue
+		}
+		if info.Progress >= 1 {
+			log.Println("Finished downloading: ", p.name)
+			continue //finished downloading, drop it
+		}
+		p.misses = 0
+		stillPending = append(stillPending, p)
+		lines = append(lines, fmt.Sprintf("Waiting: %s - %.1f%% (ETA %s)", p.name, info.Progress*100, formatEta(info.Eta)))
+	}
+
+	pendingMu.Lock()
+	pending = stillPending
+	pendingMu.Unlock()
+	return lines
+}
+
 func main() {
+
+	configPath := flag.String("config", configFile, "Path to the JSON config file")
+	rootFlag := flag.String("root", "", "Override: root directory to watch for new torrent files")
+	newRootFlag := flag.String("newRoot", "", "Override: directory to copy completed files into")
+	listenOnFlag := flag.String("listenOn", "", "Override: address the log HTTP server listens on")
+	qbitURLFlag := flag.String("qbitURL", "", "Override: qBittorrent WebUI base URL")
+	qbitUserFlag := flag.String("qbitUser", "", "Override: qBittorrent WebUI username")
+	qbitPassFlag := flag.String("qbitPass", "", "Override: qBittorrent WebUI password")
+	flag.Parse()
+
+	loadedCfg, err := loadConfig(*configPath)
+	if err != nil {
+		log.Fatal("Error loading " + *configPath + ": " + err.Error())
+	}
+	cfg = loadedCfg
+
+	//Apply command-line overrides
+	for _, o := range []struct {
+		flag *string
+		dest *string
+	}{
+		{rootFlag, &cfg.Root}, {newRootFlag, &cfg.NewRoot}, {listenOnFlag, &cfg.ListenOn},
+		{qbitURLFlag, &cfg.QbitURL}, {qbitUserFlag, &cfg.QbitUser}, {qbitPassFlag, &cfg.QbitPass},
+	} {
+		if *o.flag != "" {
+			*o.dest = *o.flag
+		}
+	}
+
+	if err := validateConfig(cfg); err != nil {
+		log.Fatal("Error in config: " + err.Error())
+	}
+	doneDir = cfg.Root + "DONE/"
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -51,6 +381,10 @@ func main() {
 	//Send log to a buffer
 	lw := LogWriter{}
 	log.SetOutput(&lw)
+
+	//Log into the qBittorrent WebUI, then keep retrying every 15 seconds in the background if disconnected
+	qbitLogin()
+	go qbitMonitor()
 
 	//Recursive function to add watches to directories
 	var addWatch func(string) error
@@ -80,7 +414,7 @@ func main() {
 	}
 
 	//Start watching from the root directory
-	if err := addWatch(root); err != nil {
+	if err := addWatch(cfg.Root); err != nil {
 		log.Fatal("Error watching root directory: " + err.Error())
 	}
 
@@ -147,12 +481,15 @@ func main() {
 		}
 		w.Write([]byte("<html><head><meta http-equiv=refresh content=5;url=./?AlreadyLogged></head><body>"))
 		w.Write([]byte(strings.ReplaceAll(html.EscapeString(lw.Buffer.String()), "\n", "<br>\n")))
+		for _, line := range pendingStatusLines() {
+			w.Write([]byte("<br>\n" + html.EscapeString(line)))
+		}
 		w.Write([]byte("\n<div id=End></div><script>window.addEventListener('DOMContentLoaded', () => setTimeout(() => window.scrollTo(0, document.getElementById('End').offsetTop), 100));</script></body></html>"))
 	}
 
 	//Start the http server for log output
 	srv := &http.Server{
-		Addr:         listenOn,
+		Addr:         cfg.ListenOn,
 		Handler:      http.HandlerFunc(handler),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -180,7 +517,7 @@ func main() {
 
 func ProcessFile(eventPath string) string {
 	//Get the path parts of the new file
-	newFilePath := strings.Split(eventPath[len(root):], "/")
+	newFilePath := strings.Split(eventPath[len(cfg.Root):], "/")
 
 	//If not a valid path, return an error
 	if !slices.Contains([]string{"Dir1", "Dir2"}, newFilePath[0]) {
@@ -197,7 +534,7 @@ func ProcessFile(eventPath string) string {
 	}
 
 	//Create the new directory
-	newDir := newRoot + strings.Join(newFilePath[0:len(newFilePath)-1], "/") + "/"
+	newDir := cfg.NewRoot + strings.Join(newFilePath[0:len(newFilePath)-1], "/") + "/"
 	if err := os.MkdirAll(newDir, 0775); err != nil {
 		return "Could not create new path: " + err.Error()
 	}
@@ -243,86 +580,13 @@ func ProcessFile(eventPath string) string {
 		return "Ignoring non-torrent file"
 	}
 
-	//Send the torrent to qbittorrent
-	stdOut, err := os.CreateTemp("", "Stdout")
-	if err != nil {
-		return "Error creating temp stdOut: " + err.Error()
+	//Send the torrent to qbittorrent via the WebUI API
+	tag := fmt.Sprintf("AddTorrent-%d", time.Now().UnixNano())
+	if err := qbitAddTorrent(newDir+newFile, newDir, tag); err != nil {
+		return "Error adding torrent to qbittorrent: " + err.Error()
 	}
-	stdErr, err := os.CreateTemp("", "stdErr")
-	if err != nil {
-		return "Error creating temp stdErr: " + err.Error()
-	}
-	params := []string{
-		"/usr/bin/flatpak",
-		"run", "--branch=stable", "--arch=x86_64", "--command=qbittorrent",
-		"org.qbittorrent.qBittorrent",
-		newDir + newFile,
-		"--save-path=" + newDir,
-		"--skip-dialog=true",
-	}
-	Proc, err := os.StartProcess(
-		"/usr/bin/flatpak",
-		params,
-		&os.ProcAttr{
-			"",
-			nil,
-			[]*os.File{nil, stdOut, stdErr},
-			nil,
-		},
-	)
-	if err != nil {
-		return "Error from qbittorrent: " + err.Error()
-	}
-
-	//Output the results
-	log.Println("Running: ", strings.Join(quoteParams(params), " "))
-	Proc.Wait()
-	log.Println("STDOUT: ", returnFirst(io.ReadAll(stdOut)))
-	log.Println("STDERR: ", returnFirst(io.ReadAll(stdErr)))
-	stdOut.Close()
-	stdErr.Close()
-
-	//Output the last 5 lines from the log file
-	go func() {
-		time.Sleep(5 * time.Second) //Pause for 5 seconds to make sure the action has completed
-		log.Println("--------------------------------------------------------------------------")
-		if output, err := exec.Command("tail", "-n", "5", logFile).Output(); err != nil {
-			log.Println("Error executing tail log command: ", err)
-		} else {
-			log.Println(string(output))
-		}
-		log.Println("--------------------------------------------------------------------------")
-	}()
-
-	//Check every 5 seconds for a non torrent file
-	go func() {
-		for {
-			files, err := os.ReadDir(newDir)
-			if err != nil {
-				log.Println("Error while waiting for file: ", err)
-				return
-			}
-			for _, file := range files {
-				if !strings.HasSuffix(strings.ToLower(file.Name()), ".torrent") {
-					log.Println("Found file: ", file.Name())
-					return
-				}
-			}
-			time.Sleep(5 * time.Second)
-		}
-	}()
+	log.Println("Added to qbittorrent: ", newDir+newFile)
+	addPending(tag, newFile)
 
 	return "Success"
-}
-
-func quoteParams(params []string) []string {
-	quoted := make([]string, len(params))
-	for i, param := range params {
-		quoted[i] = strconv.Quote(param)
-	}
-	return quoted
-}
-
-func returnFirst[T any](a T, _ interface{}) T {
-	return a
 }

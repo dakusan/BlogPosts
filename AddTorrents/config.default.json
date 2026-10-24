@@ -1,0 +1,8 @@
+{
+	"root": "/home/plex/Needed torrents/",
+	"newRoot": "/home/plex/library/",
+	"listenOn": ":5151",
+	"qbitURL": "http://localhost:8080",
+	"qbitUser": "admin",
+	"qbitPass": "CHANGE_ME"
+}
