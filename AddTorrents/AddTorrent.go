@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/dlclark/regexp2"
 	"github.com/fsnotify/fsnotify"
+	"github.com/tidwall/jsonc"
 	"html"
 	"io"
 	"log"
@@ -28,25 +30,42 @@ const configFile = "config.json"
 
 //Config holds the settings loaded from configFile at startup
 type Config struct {
-	Root     string `json:"root"`
-	NewRoot  string `json:"newRoot"`
-	ListenOn string `json:"listenOn"`
-	QbitURL  string `json:"qbitURL"`
-	QbitUser string `json:"qbitUser"`
-	QbitPass string `json:"qbitPass"`
+	Root               string `json:"root"`
+	NewRoot            string `json:"newRoot"`
+	ListenOn           string `json:"listenOn"`
+	QbitURL            string `json:"qbitURL"`
+	QbitUser           string `json:"qbitUser"`
+	QbitPass           string `json:"qbitPass"`
+	FileRegex          string `json:"fileRegex"`
+	FileRegexBlacklist string `json:"fileRegexBlacklist"` //optional; empty means no blacklist filtering
 }
 
 var cfg Config
 var doneDir string
+var fileRegex *regexp2.Regexp
+var fileRegexBlacklist *regexp2.Regexp //nil when cfg.FileRegexBlacklist is empty, i.e. no blacklist
 
-//loadConfig reads and parses the JSON config file at path, erroring if it is missing or invalid
+//regexMatchTimeout bounds how long a single match attempt may run, since regexp2 (unlike stdlib regexp/RE2) backtracks and a pathological pattern+input pair could otherwise hang.
+const regexMatchTimeout = 2 * time.Second
+
+//compileRegex compiles pattern with regexMatchTimeout applied
+func compileRegex(pattern string) (*regexp2.Regexp, error) {
+	re, err := regexp2.Compile(pattern, regexp2.None)
+	if err != nil {
+		return nil, err
+	}
+	re.MatchTimeout = regexMatchTimeout
+	return re, nil
+}
+
+//loadConfig reads and parses the JSONC (JSON with // and /* */ comments allowed) config file at path, erroring if it is missing or invalid
 func loadConfig(path string) (Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Config{}, err
 	}
 	var c Config
-	if err := json.Unmarshal(data, &c); err != nil {
+	if err := json.Unmarshal(jsonc.ToJSON(data), &c); err != nil {
 		return Config{}, err
 	}
 	return c, nil
@@ -57,6 +76,7 @@ func validateConfig(c Config) error {
 	required := []struct{ name, value string }{
 		{"root", c.Root}, {"newRoot", c.NewRoot}, {"listenOn", c.ListenOn},
 		{"qbitURL", c.QbitURL}, {"qbitUser", c.QbitUser}, {"qbitPass", c.QbitPass},
+		{"fileRegex", c.FileRegex},
 	}
 	for _, f := range required {
 		if f.value == "" {
@@ -64,6 +84,14 @@ func validateConfig(c Config) error {
 		}
 	}
 	return nil
+}
+
+//isWithinRoot reports whether path, once cleaned, is root itself or a descendant of it.
+//Used as defense-in-depth so a crafted/misconfigured path can never make a copy/move land outside the intended tree.
+func isWithinRoot(path, root string) bool {
+	cleanRoot := filepath.Clean(root)
+	cleanPath := filepath.Clean(path)
+	return cleanPath == cleanRoot || strings.HasPrefix(cleanPath, cleanRoot+string(filepath.Separator))
 }
 
 type LogWriter struct {
@@ -346,6 +374,8 @@ func main() {
 	qbitURLFlag := flag.String("qbitURL", "", "Override: qBittorrent WebUI base URL")
 	qbitUserFlag := flag.String("qbitUser", "", "Override: qBittorrent WebUI username")
 	qbitPassFlag := flag.String("qbitPass", "", "Override: qBittorrent WebUI password")
+	fileRegexFlag := flag.String("fileRegex", "", "Override: regex that a new file's path (relative to root) must match to be copied/moved")
+	fileRegexBlacklistFlag := flag.String("fileRegexBlacklist", "", "Override: regex that, if matched, excludes an otherwise-matching file (empty disables the blacklist)")
 	flag.Parse()
 
 	loadedCfg, err := loadConfig(*configPath)
@@ -361,6 +391,7 @@ func main() {
 	}{
 		{rootFlag, &cfg.Root}, {newRootFlag, &cfg.NewRoot}, {listenOnFlag, &cfg.ListenOn},
 		{qbitURLFlag, &cfg.QbitURL}, {qbitUserFlag, &cfg.QbitUser}, {qbitPassFlag, &cfg.QbitPass},
+		{fileRegexFlag, &cfg.FileRegex}, {fileRegexBlacklistFlag, &cfg.FileRegexBlacklist},
 	} {
 		if *o.flag != "" {
 			*o.dest = *o.flag
@@ -371,6 +402,17 @@ func main() {
 		log.Fatal("Error in config: " + err.Error())
 	}
 	doneDir = cfg.Root + "DONE/"
+
+	fileRegex, err = compileRegex(cfg.FileRegex)
+	if err != nil {
+		log.Fatal("Error in config: invalid fileRegex: " + err.Error())
+	}
+	if cfg.FileRegexBlacklist != "" {
+		fileRegexBlacklist, err = compileRegex(cfg.FileRegexBlacklist)
+		if err != nil {
+			log.Fatal("Error in config: invalid fileRegexBlacklist: " + err.Error())
+		}
+	}
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -435,8 +477,8 @@ func main() {
 					break
 				}
 
-				//Stat the new object
-				info, err := os.Stat(event.Name)
+				//Stat the new object. Lstat (not Stat) is used deliberately so a symlink is never followed: this keeps the watched/moved tree from being able to escape root via a symlink planted inside it.
+				info, err := os.Lstat(event.Name)
 				if err != nil {
 					log.Println("Error statting:", err)
 					break
@@ -516,25 +558,29 @@ func main() {
 }
 
 func ProcessFile(eventPath string) string {
-	//Get the path parts of the new file
-	newFilePath := strings.Split(eventPath[len(cfg.Root):], "/")
-
-	//If not a valid path, return an error
-	if !slices.Contains([]string{"Dir1", "Dir2"}, newFilePath[0]) {
-		return "Ignoring invalid top level directory: " + newFilePath[0]
+	//Get the path of the new file, relative to root, and require it to match fileRegex (and not fileRegexBlacklist).
+	//Any match error (e.g. a timeout from a pathological pattern/input) is treated as "ignore the file", not "allow it".
+	relPath := eventPath[len(cfg.Root):]
+	if matched, err := fileRegex.MatchString(relPath); err != nil {
+		return "Error evaluating fileRegex, ignoring: " + err.Error()
+	} else if !matched {
+		return "File does not match regex, ignoring: " + relPath
 	}
-	if len(newFilePath) < 3 {
-		return "Must have at least 3 parts in the path"
+	if fileRegexBlacklist != nil {
+		if matched, err := fileRegexBlacklist.MatchString(relPath); err != nil {
+			return "Error evaluating fileRegexBlacklist, ignoring: " + err.Error()
+		} else if matched {
+			return "File matches blacklist regex, ignoring: " + relPath
+		}
 	}
-
-	//Ignore files named DoNotMove or that contain .crdownload or end with .tmp
+	newFilePath := strings.Split(relPath, "/")
 	newFile := newFilePath[len(newFilePath)-1]
-	if strings.ToLower(newFile) == "donotmove" || strings.Contains(newFile, ".crdownload") || strings.HasSuffix(newFile, ".tmp") {
-		return "Ignoring file: " + newFile
-	}
 
-	//Create the new directory
-	newDir := cfg.NewRoot + strings.Join(newFilePath[0:len(newFilePath)-1], "/") + "/"
+	//Create the new directory (isWithinRoot guards against a crafted/misconfigured path ever landing outside newRoot)
+	newDir := filepath.Clean(cfg.NewRoot+strings.Join(newFilePath[0:len(newFilePath)-1], "/")) + "/"
+	if !isWithinRoot(newDir, cfg.NewRoot) {
+		return "Refusing to write outside newRoot: " + newDir
+	}
 	if err := os.MkdirAll(newDir, 0775); err != nil {
 		return "Could not create new path: " + err.Error()
 	}

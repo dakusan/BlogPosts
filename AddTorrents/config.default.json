@@ -1,8 +1,23 @@
 {
+	//Directory tree to watch for newly added torrent/data files
 	"root": "/home/plex/Needed torrents/",
+
+	//Where the matching directory structure is mirrored and files are copied/moved to
 	"newRoot": "/home/plex/library/",
+
+	//Socket address:port the log HTTP server listens on
 	"listenOn": ":5151",
+
+	//qBittorrent WebUI parameters
 	"qbitURL": "http://localhost:8080",
 	"qbitUser": "admin",
-	"qbitPass": "CHANGE_ME"
+	"qbitPass": "CHANGE_ME",
+
+	//A new file’s path, relative to “root”, must match this regex to be copied/moved
+	//This example requires at least 3 path segments (top dir / subdir(s) / filename)
+	"fileRegex": "^[^/]+/.+/[^/]+$",
+
+	//Optional; empty disables it. If this matches, the file is excluded even if fileRegex matched
+	//This example excludes files named "DoNotMove" (case-insensitive), containing ".crdownload", or ending in ".tmp"
+	"fileRegexBlacklist": "(?i)(^|/)DoNotMove$|\\.crdownload|\\.tmp$"
 }
