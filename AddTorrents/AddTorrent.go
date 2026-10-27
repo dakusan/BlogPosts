@@ -32,6 +32,7 @@ const configFile = "config.json"
 type Config struct {
 	Root               string `json:"root"`
 	NewRoot            string `json:"newRoot"`
+	DoneDir            string `json:"doneDir"` //optional; empty means delete the original file instead of moving it here
 	ListenOn           string `json:"listenOn"`
 	QbitURL            string `json:"qbitURL"`
 	QbitUser           string `json:"qbitUser"`
@@ -41,7 +42,6 @@ type Config struct {
 }
 
 var cfg Config
-var doneDir string
 var fileRegex *regexp2.Regexp
 var fileRegexBlacklist *regexp2.Regexp //nil when cfg.FileRegexBlacklist is empty, i.e. no blacklist
 
@@ -370,6 +370,7 @@ func main() {
 	configPath := flag.String("config", configFile, "Path to the JSON config file")
 	rootFlag := flag.String("root", "", "Override: root directory to watch for new torrent files")
 	newRootFlag := flag.String("newRoot", "", "Override: directory to copy completed files into")
+	doneDirFlag := flag.String("doneDir", "", "Override: directory to move original files into once copied (empty just deletes them instead)")
 	listenOnFlag := flag.String("listenOn", "", "Override: address the log HTTP server listens on")
 	qbitURLFlag := flag.String("qbitURL", "", "Override: qBittorrent WebUI base URL")
 	qbitUserFlag := flag.String("qbitUser", "", "Override: qBittorrent WebUI username")
@@ -389,7 +390,7 @@ func main() {
 		flag *string
 		dest *string
 	}{
-		{rootFlag, &cfg.Root}, {newRootFlag, &cfg.NewRoot}, {listenOnFlag, &cfg.ListenOn},
+		{rootFlag, &cfg.Root}, {newRootFlag, &cfg.NewRoot}, {doneDirFlag, &cfg.DoneDir}, {listenOnFlag, &cfg.ListenOn},
 		{qbitURLFlag, &cfg.QbitURL}, {qbitUserFlag, &cfg.QbitUser}, {qbitPassFlag, &cfg.QbitPass},
 		{fileRegexFlag, &cfg.FileRegex}, {fileRegexBlacklistFlag, &cfg.FileRegexBlacklist},
 	} {
@@ -401,7 +402,6 @@ func main() {
 	if err := validateConfig(cfg); err != nil {
 		log.Fatal("Error in config: " + err.Error())
 	}
-	doneDir = cfg.Root + "DONE/"
 
 	fileRegex, err = compileRegex(cfg.FileRegex)
 	if err != nil {
@@ -431,6 +431,9 @@ func main() {
 	//Recursive function to add watches to directories
 	var addWatch func(string) error
 	addWatch = func(dir string) error {
+		if cfg.DoneDir != "" && isWithinRoot(dir, cfg.DoneDir) {
+			return nil //Never watch doneDir: files moved there must not generate events and get reprocessed
+		}
 		if slices.Contains(watcher.WatchList(), dir) {
 			return nil //Already watching this directory
 		}
@@ -603,8 +606,14 @@ func ProcessFile(eventPath string) string {
 	source.Close()
 	log.Println("File copied to: ", newDir+newFile)
 
-	//Remove the file and parent directories (only warn if it cannot be removed)
-	if err := os.Rename(eventPath, doneDir+newFile); err != nil {
+	//Remove the original file: delete it if no doneDir is configured, otherwise move it there (only warn if either fails)
+	if cfg.DoneDir == "" {
+		if err := os.Remove(eventPath); err != nil {
+			log.Printf("Warning: Could not delete “%s”: %s\n", eventPath, err.Error())
+		}
+	} else if err := os.MkdirAll(cfg.DoneDir, 0775); err != nil {
+		log.Printf("Warning: Could not create DONE directory “%s”: %s\n", cfg.DoneDir, err.Error())
+	} else if err := os.Rename(eventPath, filepath.Clean(cfg.DoneDir)+"/"+newFile); err != nil {
 		log.Printf("Warning: Could not move “%s” to DONE directory: %s\n", eventPath, err.Error())
 	}
 

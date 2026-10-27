@@ -12,6 +12,7 @@ The program exits immediately (logging why) if the config file is missing/invali
 | ----------------------------------------- | ----------- |
 | <kbd>root</kbd>                           | The directory to watch |
 | <kbd>newRoot</kbd>                        | The directory to move files to |
+| <kbd>doneDir</kbd>                        | Optional (empty = disabled). Where the original file is moved after being copied. If empty, the original is deleted instead. |
 | <kbd>listenOn</kbd>                       | The address:port for the http log interface |
 | <kbd>qbitURL</kbd>                        | The url to access the qBittorrent WebUI |
 | <kbd>qbitUser</kbd>                       | The username to access the qBittorrent WebUI |
@@ -27,12 +28,14 @@ The program exits immediately (logging why) if the config file is missing/invali
 
 - Logs into the qBittorrent WebUI at startup; if that fails (or later requests start failing), a background goroutine retries the login every 15 seconds.
 	- “Connected”/“Lost connection” is only logged on the actual lost/regained transition, not on every retry.
-- Recursively watches <kbd>root</kbd> for filesystem events using fsnotify, adding watches to any new subdirectories as they appear. Symlinks are never followed.
+- Recursively watches <kbd>root</kbd> for filesystem events using fsnotify, adding watches to any new subdirectories as they appear.
+	- Symlinks are never followed
+	- <kbd>doneDir</kbd> (if it’s inside <kbd>root</kbd>) is never watched, so files moved there can’t generate events and get reprocessed.
 - On a new file creation/rename event, calls ProcessFile on the new path:
 	- The path, relative to <kbd>root</kbd>, must match <kbd>fileRegex</kbd> and must not match <kbd>fileRegexBlacklist</kbd> (if set), or it's ignored and logged accordingly.
 	- Mirrors the directory structure under <kbd>newRoot</kbd>, creating directories as needed. The resulting path is re-checked to confirm it still falls under <kbd>newRoot</kbd> before anything is written.
 	- Waits 3 seconds (to let the source file finish being written), then copies the file to its new location under <kbd>newRoot</kbd>.
-	- Moves (renames) the original file into <kbd>doneDir</kbd> (<kbd>root</kbd>+“DONE/”) once copied.
+	- Once copied, the original file is moved (renamed) into <kbd>doneDir</kbd>, or deleted if <kbd>doneDir</kbd> is empty.
 	- If the file is a “.torrent” file, adds it to qBittorrent via its WebUI API (<kbd>qbitURL</kbd>) with the save path set to the new directory and a unique tag so its progress can be tracked, and logs whether the add succeeded or failed.
 - All log output from the current session is captured in memory (via LogWriter, which also echoes to stderr) and served over HTTP on <kbd>listenOn</kbd>. Any request returns an HTML page with:
 	- The accumulated log buffer

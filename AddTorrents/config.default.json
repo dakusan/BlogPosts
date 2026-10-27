@@ -5,6 +5,9 @@
 	//Where the matching directory structure is mirrored and files are copied/moved to
 	"newRoot": "/home/plex/library/",
 
+	//Where the original file is moved after being copied. Optional; if empty, the original is deleted instead
+	"doneDir": "/home/plex/Needed torrents/DONE/",
+
 	//Socket address:port the log HTTP server listens on
 	"listenOn": ":5151",
 
