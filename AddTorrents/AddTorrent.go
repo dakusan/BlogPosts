@@ -303,6 +303,29 @@ func qbitTorrentByTag(tag string) (*qbitTorrentInfo, error) {
 	return &infos[0], nil
 }
 
+//qbitDeleteTag removes tag from qBittorrent entirely. Each tag is unique to the one torrent it was
+//created for, so this doesn't affect anything else; it just keeps qBittorrent's tag list from
+//accumulating one orphaned entry per torrent ever added forever.
+func qbitDeleteTag(tag string) error {
+	resp, err := qbitDo(func() (*http.Request, error) {
+		req, err := http.NewRequest("POST", cfg.QbitURL+"/api/v2/torrents/deleteTags", strings.NewReader(url.Values{"tags": {tag}}.Encode()))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		return req, nil
+	})
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("deleteTags rejected (status %d): %s", resp.StatusCode, string(body))
+	}
+	return nil
+}
+
 //pendingTorrent tracks a torrent added to qBittorrent whose progress is still shown on the log page
 type pendingTorrent struct {
 	tag    string
@@ -330,6 +353,12 @@ func formatEta(seconds int64) string {
 	return (time.Duration(seconds) * time.Second).Round(time.Second).String()
 }
 
+//pendingUpdate is the outcome of checking one pending torrent's progress, applied back to the live list by tag
+type pendingUpdate struct {
+	remove bool
+	misses int
+}
+
 //pendingStatusLines queries qBittorrent for the live progress/ETA of every pending torrent, dropping any that have finished or gone stale
 func pendingStatusLines() []string {
 	pendingMu.Lock()
@@ -337,30 +366,49 @@ func pendingStatusLines() []string {
 	pendingMu.Unlock()
 
 	var lines []string
-	var stillPending []pendingTorrent
+	updates := make(map[string]pendingUpdate, len(snapshot))
 	for _, p := range snapshot {
 		info, err := qbitTorrentByTag(p.tag)
 		if err != nil || info == nil {
-			p.misses++
-			if p.misses < 5 {
-				stillPending = append(stillPending, p)
+			misses := p.misses + 1
+			if misses < 5 {
+				updates[p.tag] = pendingUpdate{misses: misses}
 				lines = append(lines, fmt.Sprintf("Waiting: %s - status unknown", p.name))
 			} else {
+				updates[p.tag] = pendingUpdate{remove: true}
 				log.Println("Gave up tracking progress for: ", p.name)
+				if err := qbitDeleteTag(p.tag); err != nil {
+					log.Println("Warning: could not delete tag for “"+p.name+"”: ", err)
+				}
 			}
 			continue
 		}
 		if info.Progress >= 1 {
+			updates[p.tag] = pendingUpdate{remove: true}
 			log.Println("Finished downloading: ", p.name)
+			if err := qbitDeleteTag(p.tag); err != nil {
+				log.Println("Warning: could not delete tag for “"+p.name+"”: ", err)
+			}
 			continue //finished downloading, drop it
 		}
-		p.misses = 0
-		stillPending = append(stillPending, p)
+		updates[p.tag] = pendingUpdate{misses: 0}
 		lines = append(lines, fmt.Sprintf("Waiting: %s - %.1f%% (ETA %s)", p.name, info.Progress*100, formatEta(info.Eta)))
 	}
 
+	//Apply updates to the live list by tag rather than overwriting it with the stale snapshot, so a
+	//torrent added concurrently (while the qBittorrent lookups above were in flight) isn't lost.
 	pendingMu.Lock()
-	pending = stillPending
+	filtered := make([]pendingTorrent, 0, len(pending))
+	for _, p := range pending {
+		if u, ok := updates[p.tag]; ok {
+			if u.remove {
+				continue
+			}
+			p.misses = u.misses
+		}
+		filtered = append(filtered, p)
+	}
+	pending = filtered
 	pendingMu.Unlock()
 	return lines
 }
@@ -374,7 +422,7 @@ func main() {
 	listenOnFlag := flag.String("listenOn", "", "Override: address the log HTTP server listens on")
 	qbitURLFlag := flag.String("qbitURL", "", "Override: qBittorrent WebUI base URL")
 	qbitUserFlag := flag.String("qbitUser", "", "Override: qBittorrent WebUI username")
-	qbitPassFlag := flag.String("qbitPass", "", "Override: qBittorrent WebUI password")
+	qbitPassFlag := flag.String("qbitPass", "", "Override: qBittorrent WebUI password (WARNING: visible to other local users via ps/proc; prefer setting this in the config file instead)")
 	fileRegexFlag := flag.String("fileRegex", "", "Override: regex that a new file's path (relative to root) must match to be copied/moved")
 	fileRegexBlacklistFlag := flag.String("fileRegexBlacklist", "", "Override: regex that, if matched, excludes an otherwise-matching file (empty disables the blacklist)")
 	flag.Parse()
@@ -397,6 +445,14 @@ func main() {
 		if *o.flag != "" {
 			*o.dest = *o.flag
 		}
+	}
+
+	//root/newRoot are relied on as path prefixes throughout (e.g. stripping len(cfg.Root) off an event path), which silently breaks if either is missing its trailing slash; normalize it here rather than requiring every config/flag author to remember it.
+	if cfg.Root != "" && !strings.HasSuffix(cfg.Root, "/") {
+		cfg.Root += "/"
+	}
+	if cfg.NewRoot != "" && !strings.HasSuffix(cfg.NewRoot, "/") {
+		cfg.NewRoot += "/"
 	}
 
 	if err := validateConfig(cfg); err != nil {
@@ -542,10 +598,11 @@ func main() {
 	}
 	go func() {
 		log.Println("Starting server")
-		if err := srv.ListenAndServe(); err != nil {
-			log.Fatal("Server closed ("+err.Error()+")")
+ 		//ListenAndServe always returns a non-nil error; http.ErrServerClosed means Shutdown()
+		//was called deliberately (e.g. SIGTERM), so that case must not be treated as fatal.
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal("Server closed (" + err.Error() + ")")
 		}
-		log.Println()
 	}()
 
 	//Close the server
