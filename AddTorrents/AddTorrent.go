@@ -3,13 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/dlclark/regexp2"
 	"github.com/fsnotify/fsnotify"
 	"github.com/tidwall/jsonc"
-	"html"
 	"io"
 	"log"
 	"mime/multipart"
@@ -94,22 +94,86 @@ func isWithinRoot(path, root string) bool {
 	return cleanPath == cleanRoot || strings.HasPrefix(cleanPath, cleanRoot+string(filepath.Separator))
 }
 
-type LogWriter struct {
-	Buffer bytes.Buffer
+//MaxLogLines is the capacity of LogRingBuffer: the number of most-recent log lines kept in memory.
+const MaxLogLines = 1000
+
+//LogRingBuffer is a log.SetOutput target that keeps the last MaxLogLines log lines, each numbered by a never-wrapping, ever-increasing line number (0-indexed; -1 is the client-facing sentinel for “nothing yet”).
+//A line’s storage slot is just lineNumber % MaxLogLines.
+type LogRingBuffer struct {
+	LockMu         sync.Mutex
+	Lines          [MaxLogLines]string
+	NextLineNumber int //count of lines written so far; also the line number the next Write will receive
 }
 
-func (lw *LogWriter) Write(p []byte) (int, error) {
-	//Write to internal buffer
-	n, err := lw.Buffer.Write(p)
-	if err != nil {
-		return n, err
-	}
+//Write implements io.Writer. Each call corresponds to exactly one log.Println/Printf/etc statement
+//The log package’s Output always does exactly one Write per statement, even if the message contains embedded newlines), so no line-splitting is needed: one Write is one ring-buffer entry.
+func (lb *LogRingBuffer) Write(P []byte) (int, error) {
+	lb.LockMu.Lock()
+	lb.Lines[lb.NextLineNumber%MaxLogLines] = strings.TrimSuffix(string(P), "\n")
+	lb.NextLineNumber++
+	lb.LockMu.Unlock()
 
 	//Also write to stderr
-	return os.Stderr.Write(p)
+	return os.Stderr.Write(P)
 }
 
-//qbitClient holds the authenticated session (cookie jar) used to talk to the qBittorrent WebUI API; guarded by qbitClientMu since it's read/written from multiple goroutines
+//LinesSince returns every retained log line after AfterLine (AfterLine == -1 means “from the oldest retained line”) as plain text
+//The client is responsible for safely rendering it (e.g. via textContent) plus the line number the caller should remember as its new AfterLine for the next call.
+//Callers are responsible for passing -1 instead of a stale AfterLine when they’ve detected (via ServerStartTime) that it’s no longer valid.
+func (lb *LogRingBuffer) LinesSince(AfterLine int) (Lines []string, NewAfterLine int) {
+	lb.LockMu.Lock()
+	defer lb.LockMu.Unlock()
+
+	OldestAvailable := max(0, lb.NextLineNumber-MaxLogLines)
+	Start := max(AfterLine+1, OldestAvailable)
+
+	//Return nil if no lines to send
+	Count := lb.NextLineNumber - Start
+	if Count <= 0 {
+		return nil, lb.NextLineNumber - 1
+	}
+
+	//The result is built with at most two slice copies (one if the wanted range doesn’t wrap around the end of the backing array, two if it does) rather than growing it one line at a time.
+	Lines = make([]string, Count)
+	StartIdx := Start % MaxLogLines
+	if FirstPart := MaxLogLines - StartIdx; FirstPart < Count {
+		//The wanted range wraps around the end of the backing array
+		copy(Lines, lb.Lines[StartIdx:])
+		copy(Lines[FirstPart:], lb.Lines[:Count-FirstPart])
+	} else {
+		copy(Lines, lb.Lines[StartIdx:StartIdx+Count])
+	}
+	return Lines, lb.NextLineNumber - 1
+}
+
+//ServerStartTime identifies this particular process run (set once, at startup).
+//The client echoes back whatever value it was last given; if it doesn’t match, the client’s LastLogLine is from a since-gone process
+var ServerStartTime = time.Now().Unix()
+
+//UpdatesRequest is the JSON body the /Updates endpoint expects. ServerStartTime is 0 for a client that has never gotten a real value from the server yet (e.g. a fresh page load) - that’s a normal case, not a mismatch, since there’s nothing to have gone stale.
+type UpdatesRequest struct {
+	LastLogLine     int   `json:"LastLogLine"`
+	ServerStartTime int64 `json:"ServerStartTime"`
+}
+
+//UpdatesResponse is the JSON the /Updates endpoint returns on success
+type UpdatesResponse struct {
+	NewLogLines      []string `json:"NewLogLines"`
+	CurrentDownloads []string `json:"CurrentDownloads"`
+	NewLastLogLine   int      `json:"NewLastLogLine"`
+	ServerStartTime  int64    `json:"ServerStartTime"`
+}
+
+//UpdatesErrorResponse is the JSON the /Updates endpoint returns if the request itself was invalid
+type UpdatesErrorResponse struct {
+	Error string `json:"Error"`
+}
+
+//LogPageHTML is the static page served at “/”, embedded into the binary at compile time from logPage.html.
+//go:embed logPage.html
+var LogPageHTML string
+
+//qbitClient holds the authenticated session (cookie jar) used to talk to the qBittorrent WebUI API; guarded by qbitClientMu since it’s read/written from multiple goroutines
 var (
 	qbitClientMu sync.Mutex
 	qbitClient   *http.Client
@@ -277,7 +341,7 @@ func qbitAddTorrent(torrentPath, savePath, tag string) error {
 	return nil
 }
 
-//qbitTorrentInfo mirrors the fields we need from the qBittorrent WebUI's /api/v2/torrents/info response
+//qbitTorrentInfo mirrors the fields we need from the qBittorrent WebUI’s /api/v2/torrents/info response
 type qbitTorrentInfo struct {
 	Progress float64 `json:"progress"`
 	Eta      int64   `json:"eta"`
@@ -304,7 +368,7 @@ func qbitTorrentByTag(tag string) (*qbitTorrentInfo, error) {
 }
 
 //qbitDeleteTag removes tag from qBittorrent entirely. Each tag is unique to the one torrent it was
-//created for, so this doesn't affect anything else; it just keeps qBittorrent's tag list from
+//created for, so this doesn’t affect anything else; it just keeps qBittorrent’s tag list from
 //accumulating one orphaned entry per torrent ever added forever.
 func qbitDeleteTag(tag string) error {
 	resp, err := qbitDo(func() (*http.Request, error) {
@@ -345,7 +409,7 @@ func addPending(tag, name string) {
 	pending = append(pending, pendingTorrent{tag: tag, name: name})
 }
 
-//formatEta renders a qBittorrent eta (seconds, or 8640000 for "unknown") as a human-readable duration
+//formatEta renders a qBittorrent eta (seconds, or 8640000 for “unknown”) as a human-readable duration
 func formatEta(seconds int64) string {
 	if seconds < 0 || seconds >= 8640000 {
 		return "unknown"
@@ -353,7 +417,7 @@ func formatEta(seconds int64) string {
 	return (time.Duration(seconds) * time.Second).Round(time.Second).String()
 }
 
-//pendingUpdate is the outcome of checking one pending torrent's progress, applied back to the live list by tag
+//pendingUpdate is the outcome of checking one pending torrent’s progress, applied back to the live list by tag
 type pendingUpdate struct {
 	remove bool
 	misses int
@@ -396,7 +460,7 @@ func pendingStatusLines() []string {
 	}
 
 	//Apply updates to the live list by tag rather than overwriting it with the stale snapshot, so a
-	//torrent added concurrently (while the qBittorrent lookups above were in flight) isn't lost.
+	//torrent added concurrently (while the qBittorrent lookups above were in flight) isn’t lost.
 	pendingMu.Lock()
 	filtered := make([]pendingTorrent, 0, len(pending))
 	for _, p := range pending {
@@ -423,7 +487,7 @@ func main() {
 	qbitURLFlag := flag.String("qbitURL", "", "Override: qBittorrent WebUI base URL")
 	qbitUserFlag := flag.String("qbitUser", "", "Override: qBittorrent WebUI username")
 	qbitPassFlag := flag.String("qbitPass", "", "Override: qBittorrent WebUI password (WARNING: visible to other local users via ps/proc; prefer setting this in the config file instead)")
-	fileRegexFlag := flag.String("fileRegex", "", "Override: regex that a new file's path (relative to root) must match to be copied/moved")
+	fileRegexFlag := flag.String("fileRegex", "", "Override: regex that a new file’s path (relative to root) must match to be copied/moved")
 	fileRegexBlacklistFlag := flag.String("fileRegexBlacklist", "", "Override: regex that, if matched, excludes an otherwise-matching file (empty disables the blacklist)")
 	flag.Parse()
 
@@ -476,9 +540,9 @@ func main() {
 	}
 	defer watcher.Close()
 
-	//Send log to a buffer
-	lw := LogWriter{}
-	log.SetOutput(&lw)
+	//Send log to the ring buffer (also mirrored to stderr)
+	LogBuf := &LogRingBuffer{}
+	log.SetOutput(LogBuf)
 
 	//Log into the qBittorrent WebUI, then keep retrying every 15 seconds in the background if disconnected
 	qbitLogin()
@@ -574,18 +638,44 @@ func main() {
 
 	//Http handler func
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		if r.RequestURI == "/favicon.ico" {
+		//Ignore favicon
+		if r.URL.Path == "/favicon.ico" {
 			return
 		}
-		if r.RequestURI != "/?AlreadyLogged" {
+
+		//Anything not “/Updates” serves the static log page (and is logged, as a real page load)
+		if r.URL.Path != "/Updates" {
 			log.Println("Log request: " + r.RemoteAddr)
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Write([]byte(LogPageHTML))
+			return
 		}
-		w.Write([]byte("<html><head><meta http-equiv=refresh content=5;url=./?AlreadyLogged></head><body>"))
-		w.Write([]byte(strings.ReplaceAll(html.EscapeString(lw.Buffer.String()), "\n", "<br>\n")))
-		for _, line := range pendingStatusLines() {
-			w.Write([]byte("<br>\n" + html.EscapeString(line)))
+
+		//“/Updates” serves the AJAX JSON polling endpoint
+		w.Header().Set("Content-Type", "application/json")
+		var Req UpdatesRequest
+		if Err := json.NewDecoder(r.Body).Decode(&Req); Err != nil || Req.LastLogLine < -1 {
+			json.NewEncoder(w).Encode(UpdatesErrorResponse{Error: "Invalid request"})
+			return
 		}
-		w.Write([]byte("\n<div id=End></div><script>window.addEventListener('DOMContentLoaded', () => setTimeout(() => window.scrollTo(0, document.getElementById('End').offsetTop), 100));</script></body></html>"))
+
+		//Compile the lines
+		AfterLine := Req.LastLogLine
+		var NeedsReset=Req.ServerStartTime != 0 && Req.ServerStartTime != ServerStartTime //The client’s ServerStartTime doesn’t match ours so reset the current AfterLine and send an extra message to the client
+		if NeedsReset {
+			AfterLine = -1
+		}
+		Lines, NewLastLogLine := LogBuf.LinesSince(AfterLine)
+		if NeedsReset {
+			Lines = append([]string{time.Now().Format("2006/01/02 15:04:05") + " Server was restarted; resyncing log"}, Lines...)
+		}
+
+		json.NewEncoder(w).Encode(UpdatesResponse{
+			NewLogLines:      Lines,
+			CurrentDownloads: pendingStatusLines(),
+			NewLastLogLine:   NewLastLogLine,
+			ServerStartTime:  ServerStartTime,
+		})
 	}
 
 	//Start the http server for log output
@@ -619,7 +709,7 @@ func main() {
 
 func ProcessFile(eventPath string) string {
 	//Get the path of the new file, relative to root, and require it to match fileRegex (and not fileRegexBlacklist).
-	//Any match error (e.g. a timeout from a pathological pattern/input) is treated as "ignore the file", not "allow it".
+	//Any match error (e.g. a timeout from a pathological pattern/input) is treated as “ignore the file”, not “allow it”.
 	relPath := eventPath[len(cfg.Root):]
 	if matched, err := fileRegex.MatchString(relPath); err != nil {
 		return "Error evaluating fileRegex, ignoring: " + err.Error()

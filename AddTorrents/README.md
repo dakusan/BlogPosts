@@ -2,6 +2,24 @@
 
 This watches a directory tree (<kbd>root</kbd>) for newly added torrent files and automatically feeds them into qBittorrent, moving files to the same location under <kbd>newRoot</kbd>. Only `.torrent` files are sent to qBittorrent.
 
+## Compile
+
+```bash
+if [ ! -f config.json ]; then
+	cp config.default.json config.json
+	${EDITOR:-nano} config.json
+fi
+
+go build AddTorrent.go
+```
+
+## Run
+
+Make sure the config file is set up first (See compile)
+
+If the executable is already compiled: `./AddTorrent`
+Otherwise: `go run AddTorrent.go`
+
 ## Settings
 
 All settings are loaded from a JSONC config file (`config.json` by default, override with -config) at startup. Each setting can also be overridden individually via a same-named command-line flag (1 or 2 dashes before the name, e.g. `-root` or `--root`), which takes precedence over the value in the config file.
@@ -17,7 +35,7 @@ The program exits immediately (logging why) if the config file is missing/invali
 | <kbd>qbitURL</kbd>                        | The url to access the qBittorrent WebUI |
 | <kbd>qbitUser</kbd>                       | The username to access the qBittorrent WebUI |
 | <kbd>qbitPass</kbd>                       | The password to access the qBittorrent WebUI |
-| <kbd>fileRegex</kbd><sup>1</sup>          | A regex that a new file's path, relative to <kbd>root</kbd>, must match to be copied/moved. |
+| <kbd>fileRegex</kbd><sup>1</sup>          | A regex that a new file’s path, relative to <kbd>root</kbd>, must match to be copied/moved. |
 | <kbd>fileRegexBlacklist</kbd><sup>1</sup> | Optional (empty = disabled). A regex that, if it matches, excludes an otherwise-<kbd>fileRegex</kbd>-matching file. |
 
 * **<sup>1</sup>** Both regex fields use [`dlclark/regexp2`](https://github.com/dlclark/regexp2) (a pure-Go, no-cgo Perl/.NET-style engine), which is mostly PCRE compatible.
@@ -32,13 +50,25 @@ The program exits immediately (logging why) if the config file is missing/invali
 	- Symlinks are never followed
 	- <kbd>doneDir</kbd> (if it’s inside <kbd>root</kbd>) is never watched, so files moved there can’t generate events and get reprocessed.
 - On a new file creation/rename event, calls ProcessFile on the new path:
-	- The path, relative to <kbd>root</kbd>, must match <kbd>fileRegex</kbd> and must not match <kbd>fileRegexBlacklist</kbd> (if set), or it's ignored and logged accordingly.
+	- The path, relative to <kbd>root</kbd>, must match <kbd>fileRegex</kbd> and must not match <kbd>fileRegexBlacklist</kbd> (if set), or it’s ignored and logged accordingly.
 	- Mirrors the directory structure under <kbd>newRoot</kbd>, creating directories as needed. The resulting path is re-checked to confirm it still falls under <kbd>newRoot</kbd> before anything is written.
 	- Waits 3 seconds (to let the source file finish being written), then copies the file to its new location under <kbd>newRoot</kbd>.
 	- Once copied, the original file is moved (renamed) into <kbd>doneDir</kbd>, or deleted if <kbd>doneDir</kbd> is empty.
 	- If the file is a “.torrent” file, adds it to qBittorrent via its WebUI API (<kbd>qbitURL</kbd>) with the save path set to the new directory and a unique tag so its progress can be tracked, and logs whether the add succeeded or failed.
-- All log output from the current session is captured in memory (via LogWriter, which also echoes to stderr) and served over HTTP on <kbd>listenOn</kbd>. Any request returns an HTML page with:
-	- The accumulated log buffer
-	- The last line(s) of that page show the live percent/ETA (queried from the qBittorrent WebUI API) of any torrents that were added and have not finished downloading yet
-	- Auto-refreshes every 5 seconds and auto-scrolls to the bottom
+- Web client
+	- Served over HTTP on <kbd>listenOn</kbd>
+	- `GET /` serves a static page with two panels:
+		- A log panel
+			- Log lines are only ever appended (never cleared)
+			- Auto-scrolls to the bottom on new lines only if it was already scrolled to the bottom; otherwise its scroll position is left alone
+			- Takes up the rest of the screen that the downloads panel is not using
+		- A downloads panel
+			- Shows the live percent/ETA (queried from the qBittorrent WebUI API) of any torrents that were added and have not finished downloading yet
+			- Grows to fit its content but always leaves room for at least ~3 log lines.
+		- These requests are logged as normal page loads
+	- The page polls `POST /Updates` every 5 seconds with the highest log line number it has
+		- The server returns:
+			- The new lines; the last 1000 log lines are kept in memory in a ring buffer (also mirrored to stderr)
+			- The current downloading list
+			- A server-start identifier which lets the server detect a restart, in which case it sends the client a notice and the new log lines.
 - Listens for SIGINT/SIGTERM and performs a graceful HTTP server shutdown (5 second timeout) on receipt.

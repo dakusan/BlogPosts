@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset=utf-8>
+		<title>AddTorrent Log</title>
+		<style>
+html, body{ height:100%; margin:0; padding:0; font-size:14px; }
+body { display:flex; height:100vh; flex-direction:column; }
+#Logs { box-sizing:border-box; flex:1 1 auto; min-height:4.5em; padding:4px; overflow-y:scroll; }
+#Downloads { box-sizing:border-box; flex:0 1 auto; border-top:1px solid #888; padding:4px; overflow-y:auto; }
+#Logs>*:nth-child(even), #Downloads>*:nth-child(even) { background-color:lightgrey; }
+.TimeStamp { background-color:cyan; }
+		</style>
+	</head><body>
+		<div id=Logs></div>
+		<div id=Downloads></div>
+		<script>
+let LastLogLine=-1;
+let ServerStartTime=0;
+const LogsEl=document.getElementById('Logs');
+const DownloadsEl = document.getElementById('Downloads');
+const TimeStampRegex=/^(\d{4}\/\d\d\/\d\d \d\d:\d\d:\d\d) /;
+function CreateEl(TheText) {
+	const NewDiv=document.createElement('div');
+	const Match=TheText.match(TimeStampRegex);
+	if(Match) {
+		const Span=document.createElement('span');
+		Span.className='TimeStamp';
+		Span.textContent=Match[1];
+		NewDiv.append(Span, TheText.slice(Match[0].length));
+	} else
+		NewDiv.textContent=TheText;
+	return NewDiv;
+}
+function Poll() {
+	fetch('/Updates', {
+		method	:'POST',
+		headers	:{'Content-Type': 'application/json'},
+		body	:JSON.stringify({LastLogLine, ServerStartTime}),
+	}).then(function(r) { return r.json(); }).then(function(Data) {
+		if(Data.Error)
+			return DownloadsEl.replaceChildren(CreateEl(Data.Error));
+
+		ServerStartTime=Data.ServerStartTime;
+		if(Data.NewLogLines && Data.NewLogLines.length>0) {
+			const WasAtBottom=LogsEl.scrollTop+LogsEl.clientHeight >= LogsEl.scrollHeight-2;
+			LogsEl.append(...Data.NewLogLines.map(TheText => CreateEl(TheText)));
+			LastLogLine=Data.NewLastLogLine;
+			if(WasAtBottom)
+				LogsEl.scrollTop=LogsEl.scrollHeight;
+		}
+		DownloadsEl.replaceChildren(...(Data.CurrentDownloads || []).map(TheText => CreateEl(TheText)));
+	});
+}
+Poll();
+setInterval(Poll, 5000);
+		</script>
+	</body>
+</html>
