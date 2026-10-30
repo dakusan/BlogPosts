@@ -39,7 +39,7 @@ The program exits immediately (logging why) if the config file is missing/invali
 | <kbd>fileRegexBlacklist</kbd><sup>1</sup> | Optional (empty = disabled). A regex that, if it matches, excludes an otherwise-<kbd>fileRegex</kbd>-matching file. |
 
 * **<sup>1</sup>** Both regex fields use [`dlclark/regexp2`](https://github.com/dlclark/regexp2) (a pure-Go, no-cgo Perl/.NET-style engine), which is mostly PCRE compatible.
-	- Matches are capped at a 2-second timeout, treated as "no match"
+	- Matches are capped at a 2-second timeout, treated as “no match”
 	- Matches are unanchored (not a full-string match) — add `^`/`$` yourself if you need one.
 
 ## What it does
@@ -72,3 +72,13 @@ The program exits immediately (logging why) if the config file is missing/invali
 			- The current downloading list
 			- A server-start identifier which lets the server detect a restart, in which case it sends the client a notice and the new log lines.
 - Listens for SIGINT/SIGTERM and performs a graceful HTTP server shutdown (5 second timeout) on receipt.
+
+## Test
+
+`testing/test.sh` (or `python3 testing/run_test.py` directly) runs an end-to-end test against a temporary workspace, with no real qBittorrent needed:
+
+- Builds `AddTorrent` and `testing/fakeqbit.go` (a stand-in qBittorrent WebUI implementing just the 4 endpoints actually used).
+- Starts both, then drops several fake `.torrent` files (each containing a random token) into the test root, staggered over time.
+- Polls `/Updates` throughout the run, the same way a browser would (needed since “Finished downloading” is only logged/cleaned up in response to a poll).
+- Waits for everything to finish, then checks that the original files ended up in the right places with the right content, and that the captured log contains every expected line in the correct order.
+- Prints `PASS`/`FAIL` and exits 0/1 accordingly. Prints the URL to open in a browser partway through, so you can watch it live while it runs.
