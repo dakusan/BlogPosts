@@ -7,9 +7,10 @@
 html, body{ height:100%; margin:0; padding:0; font-size:14px; }
 body { display:flex; height:100vh; flex-direction:column; }
 #Logs { box-sizing:border-box; flex:1 1 auto; min-height:4.5em; padding:4px; overflow-y:scroll; }
-#Downloads { box-sizing:border-box; flex:0 1 auto; border-top:1px solid #888; padding:4px; overflow-y:auto; }
+#Downloads { box-sizing:border-box; flex:0 0 auto; height:max-content; border-top:1px solid #888; padding:4px; overflow-y:auto; background-color:darkgrey; }
 #Logs>*:nth-child(even), #Downloads>*:nth-child(even) { background-color:lightgrey; }
-.TimeStamp { background-color:cyan; }
+.TimeStamp { margin-right:10px; padding:0 4px; background-color:#AACCCC; }
+#Logs>*:nth-child(even) .TimeStamp { background-color:darkcyan; }
 		</style>
 	</head><body>
 		<div id=Logs></div>
@@ -33,27 +34,34 @@ function CreateEl(TheText) {
 	return NewDiv;
 }
 function Poll() {
+	const Controller=new AbortController();
+	const AbortTimer=setTimeout(() => Controller.abort(), 3000);
 	fetch('/Updates', {
 		method	:'POST',
 		headers	:{'Content-Type': 'application/json'},
 		body	:JSON.stringify({LastLogLine, ServerStartTime}),
+		signal	:Controller.signal,
 	}).then(function(r) { return r.json(); }).then(function(Data) {
 		if(Data.Error)
 			return DownloadsEl.replaceChildren(CreateEl(Data.Error));
 
 		ServerStartTime=Data.ServerStartTime;
 		if(Data.NewLogLines && Data.NewLogLines.length>0) {
-			const WasAtBottom=LogsEl.scrollTop+LogsEl.clientHeight >= LogsEl.scrollHeight-2;
+			const WasAtBottom=LogsEl.scrollTop+LogsEl.clientHeight >= LogsEl.scrollHeight-20;
 			LogsEl.append(...Data.NewLogLines.map(TheText => CreateEl(TheText)));
 			LastLogLine=Data.NewLastLogLine;
 			if(WasAtBottom)
 				LogsEl.scrollTop=LogsEl.scrollHeight;
 		}
 		DownloadsEl.replaceChildren(...(Data.CurrentDownloads || []).map(TheText => CreateEl(TheText)));
+	}).catch(function() {
+		//Network error, bad JSON, or the 3-second abort firing - just move on to the next poll
+	}).finally(function() {
+		clearTimeout(AbortTimer);
+		setTimeout(Poll, 1000);
 	});
 }
 Poll();
-setInterval(Poll, 5000);
 		</script>
 	</body>
 </html>

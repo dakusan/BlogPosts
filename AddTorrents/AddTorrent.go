@@ -94,14 +94,14 @@ func isWithinRoot(path, root string) bool {
 	return cleanPath == cleanRoot || strings.HasPrefix(cleanPath, cleanRoot+string(filepath.Separator))
 }
 
-//MaxLogLines is the capacity of LogRingBuffer: the number of most-recent log lines kept in memory.
-const MaxLogLines = 1000
+//DefaultMaxLogLines is the default capacity of a LogRingBuffer (override via -maxLogLines).
+const DefaultMaxLogLines = 1000
 
 //LogRingBuffer is a log.SetOutput target that keeps the last MaxLogLines log lines, each numbered by a never-wrapping, ever-increasing line number (0-indexed; -1 is the client-facing sentinel for “nothing yet”).
 //A line’s storage slot is just lineNumber % MaxLogLines.
 type LogRingBuffer struct {
 	LockMu         sync.Mutex
-	Lines          [MaxLogLines]string
+	Lines          []string
 	NextLineNumber int //count of lines written so far; also the line number the next Write will receive
 }
 
@@ -109,7 +109,7 @@ type LogRingBuffer struct {
 //The log package’s Output always does exactly one Write per statement, even if the message contains embedded newlines), so no line-splitting is needed: one Write is one ring-buffer entry.
 func (lb *LogRingBuffer) Write(P []byte) (int, error) {
 	lb.LockMu.Lock()
-	lb.Lines[lb.NextLineNumber%MaxLogLines] = strings.TrimSuffix(string(P), "\n")
+	lb.Lines[lb.NextLineNumber%len(lb.Lines)] = strings.TrimSuffix(string(P), "\n")
 	lb.NextLineNumber++
 	lb.LockMu.Unlock()
 
@@ -124,6 +124,7 @@ func (lb *LogRingBuffer) LinesSince(AfterLine int) (Lines []string, NewAfterLine
 	lb.LockMu.Lock()
 	defer lb.LockMu.Unlock()
 
+	MaxLogLines := len(lb.Lines)
 	OldestAvailable := max(0, lb.NextLineNumber-MaxLogLines)
 	Start := max(AfterLine+1, OldestAvailable)
 
@@ -489,7 +490,12 @@ func main() {
 	qbitPassFlag := flag.String("qbitPass", "", "Override: qBittorrent WebUI password (WARNING: visible to other local users via ps/proc; prefer setting this in the config file instead)")
 	fileRegexFlag := flag.String("fileRegex", "", "Override: regex that a new file’s path (relative to root) must match to be copied/moved")
 	fileRegexBlacklistFlag := flag.String("fileRegexBlacklist", "", "Override: regex that, if matched, excludes an otherwise-matching file (empty disables the blacklist)")
+	maxLogLinesFlag := flag.Int("maxLogLines", DefaultMaxLogLines, "Number of most-recent log lines to retain in memory; not part of config.json, mainly for testing with a small buffer")
 	flag.Parse()
+
+	if *maxLogLinesFlag <= 0 {
+		log.Fatal("Error: -maxLogLines must be positive")
+	}
 
 	loadedCfg, err := loadConfig(*configPath)
 	if err != nil {
@@ -541,7 +547,7 @@ func main() {
 	defer watcher.Close()
 
 	//Send log to the ring buffer (also mirrored to stderr)
-	LogBuf := &LogRingBuffer{}
+	LogBuf := &LogRingBuffer{Lines: make([]string, *maxLogLinesFlag)}
 	log.SetOutput(LogBuf)
 
 	//Log into the qBittorrent WebUI, then keep retrying every 15 seconds in the background if disconnected
