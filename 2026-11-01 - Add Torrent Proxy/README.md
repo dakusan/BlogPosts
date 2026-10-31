@@ -89,3 +89,9 @@ The program exits immediately (logging why) if the config file is missing/invali
 - Polls `/Updates` throughout the run, the same way a browser would (needed since “Finished downloading” is only logged/cleaned up in response to a poll).
 - Waits for everything to finish, then checks that the original files ended up in the right places with the right content, and that the captured log contains every expected line in the correct order.
 - Prints `PASS`/`FAIL` and exits 0/1 accordingly. Prints the URL to open in a browser partway through, so you can watch it live while it runs.
+
+## Blog post mirror
+
+[Add Torrent Proxy](https://www.castledragmire.com/Posts/Add_Torrent_Proxy)<br>
+Date: 2026-11-01<br>
+Tags: Servers, Proxy, Torrent, GoLang, JavaScript, Permissions
