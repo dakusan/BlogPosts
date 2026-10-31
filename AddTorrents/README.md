@@ -1,6 +1,13 @@
 # Add Torrent Proxy
 
-This watches a directory tree (<kbd>root</kbd>) for newly added torrent files and automatically feeds them into qBittorrent, moving files to the same location under <kbd>newRoot</kbd>. Only `.torrent` files are sent to qBittorrent.
+This monitors a shared directory in which an unprivileged user can save a torrent file, triggering a torrent download into an otherwise-inaccessible destination with the same relative path. Includes a web UI to monitor progress.
+- Watches a directory tree (<kbd>root</kbd>) for newly added files
+- Copies the files to the same relative location under <kbd>newRoot</kbd>
+	- Files are restricted by whitelist/blacklist rules
+- Optionally moves the file into a unified <kbd>doneDir</kbd> (deletes if blank)
+- Any `.torrent` file among them is also added to qBittorrent for downloading into the relative directory under <kbd>newRoot</kbd>
+- Has a web UI to monitor logs and torrent download status
+- Tested on Linux and would probably work on Windows
 
 ## Compile
 
@@ -28,15 +35,15 @@ The program exits immediately (logging why) if the config file is missing/invali
 
 | [Config] Name                             | Description |
 | ----------------------------------------- | ----------- |
-| <kbd>root</kbd>                           | The directory to watch |
-| <kbd>newRoot</kbd>                        | The directory to move files to |
-| <kbd>doneDir</kbd>                        | Optional (empty = disabled). Where the original file is moved after being copied. If empty, the original is deleted instead. |
-| <kbd>listenOn</kbd>                       | The address:port for the http log interface |
-| <kbd>qbitURL</kbd>                        | The url to access the qBittorrent WebUI |
-| <kbd>qbitUser</kbd>                       | The username to access the qBittorrent WebUI |
-| <kbd>qbitPass</kbd>                       | The password to access the qBittorrent WebUI |
-| <kbd>fileRegex</kbd><sup>1</sup>          | A regex that a new file’s path, relative to <kbd>root</kbd>, must match to be copied/moved. |
-| <kbd>fileRegexBlacklist</kbd><sup>1</sup> | Optional (empty = disabled). A regex that, if it matches, excludes an otherwise-<kbd>fileRegex</kbd>-matching file. |
+| <kbd>root</kbd>                           | Root directory to watch for new files |
+| <kbd>newRoot</kbd>                        | The directory files are copied into, and torrents are downloaded into, at the same relative path as under <kbd>root</kbd> |
+| <kbd>doneDir</kbd>                        | Where the original file is moved after being copied. If empty, the original is deleted instead. |
+| <kbd>listenOn</kbd>                       | The “address:port” for the http log web UI |
+| <kbd>qbitURL</kbd>                        | The qBittorrent WebUI base URL |
+| <kbd>qbitUser</kbd>                       | The qBittorrent WebUI username |
+| <kbd>qbitPass</kbd>                       | The qBittorrent WebUI password |
+| <kbd>fileRegex</kbd><sup>1</sup>          | A regex that a new file’s path, relative to <kbd>root</kbd>, must match to trigger actions. |
+| <kbd>fileRegexBlacklist</kbd><sup>1</sup> | A regex that, if matched, excludes an otherwise-matching file (empty disables the blacklist) |
 
 * **<sup>1</sup>** Both regex fields use [`dlclark/regexp2`](https://github.com/dlclark/regexp2) (a pure-Go, no-cgo Perl/.NET-style engine), which is mostly PCRE compatible.
 	- Matches are capped at a 2-second timeout, treated as “no match”
