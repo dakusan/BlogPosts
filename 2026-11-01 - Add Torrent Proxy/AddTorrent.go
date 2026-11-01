@@ -159,10 +159,10 @@ type UpdatesRequest struct {
 
 //UpdatesResponse is the JSON the /Updates endpoint returns on success
 type UpdatesResponse struct {
-	NewLogLines      []string `json:"NewLogLines"`
-	CurrentDownloads []string `json:"CurrentDownloads"`
-	NewLastLogLine   int      `json:"NewLastLogLine"`
-	ServerStartTime  int64    `json:"ServerStartTime"`
+	NewLogLines      []string      `json:"NewLogLines"`
+	CurrentDownloads []DownloadRow `json:"CurrentDownloads"`
+	NewLastLogLine   int           `json:"NewLastLogLine"`
+	ServerStartTime  int64         `json:"ServerStartTime"`
 }
 
 //UpdatesErrorResponse is the JSON the /Updates endpoint returns if the request itself was invalid
@@ -344,8 +344,15 @@ func qbitAddTorrent(torrentPath, savePath, tag string) error {
 
 //qbitTorrentInfo mirrors the fields we need from the qBittorrent WebUI’s /api/v2/torrents/info response
 type qbitTorrentInfo struct {
-	Progress float64 `json:"progress"`
-	Eta      int64   `json:"eta"`
+	Progress      float64 `json:"progress"`
+	Eta           int64   `json:"eta"`
+	Completed     int64   `json:"completed"`
+	Size          int64   `json:"size"`
+	NumSeeds      int     `json:"num_seeds"`
+	NumComplete   int     `json:"num_complete"`
+	NumLeechs     int     `json:"num_leechs"`
+	NumIncomplete int     `json:"num_incomplete"`
+	DlSpeed       int64   `json:"dlspeed"`
 }
 
 //qbitTorrentByTag looks up the (single) torrent with the given unique tag, returning nil if none is found
@@ -418,19 +425,41 @@ func formatEta(seconds int64) string {
 	return (time.Duration(seconds) * time.Second).Round(time.Second).String()
 }
 
+//formatSize renders a byte count as "#.##LL" (2 decimals, binary units: B/KB/MB/GB/TB/PB)
+func formatSize(bytes int64) string {
+	units := [...]string{"B", "KB", "MB", "GB", "TB", "PB"}
+	size := float64(bytes)
+	unit := 0
+	for size >= 1024 && unit < len(units)-1 {
+		size /= 1024
+		unit++
+	}
+	return fmt.Sprintf("%.2f%s", size, units[unit])
+}
+
+//DownloadRow is one row of the Downloads table shown on the log page
+type DownloadRow struct {
+	Name     string `json:"Name"`
+	Progress string `json:"Progress"`
+	Eta      string `json:"Eta"`
+	Size     string `json:"Size"`
+	Conns    string `json:"Conns"`
+	Speed    string `json:"Speed"`
+}
+
 //pendingUpdate is the outcome of checking one pending torrent’s progress, applied back to the live list by tag
 type pendingUpdate struct {
 	remove bool
 	misses int
 }
 
-//pendingStatusLines queries qBittorrent for the live progress/ETA of every pending torrent, dropping any that have finished or gone stale
-func pendingStatusLines() []string {
+//pendingStatusRows queries qBittorrent for the live progress/stats of every pending torrent, dropping any that have finished or gone stale
+func pendingStatusRows() []DownloadRow {
 	pendingMu.Lock()
 	snapshot := append([]pendingTorrent(nil), pending...)
 	pendingMu.Unlock()
 
-	var lines []string
+	var rows []DownloadRow
 	updates := make(map[string]pendingUpdate, len(snapshot))
 	for _, p := range snapshot {
 		info, err := qbitTorrentByTag(p.tag)
@@ -438,7 +467,7 @@ func pendingStatusLines() []string {
 			misses := p.misses + 1
 			if misses < 5 {
 				updates[p.tag] = pendingUpdate{misses: misses}
-				lines = append(lines, fmt.Sprintf("Waiting: %s - status unknown", p.name))
+				rows = append(rows, DownloadRow{Name: p.name, Progress: "status unknown", Eta: "-", Size: "-", Conns: "-", Speed: "-"})
 			} else {
 				updates[p.tag] = pendingUpdate{remove: true}
 				log.Println("Gave up tracking progress for: ", p.name)
@@ -457,7 +486,14 @@ func pendingStatusLines() []string {
 			continue //finished downloading, drop it
 		}
 		updates[p.tag] = pendingUpdate{misses: 0}
-		lines = append(lines, fmt.Sprintf("Waiting: %s - %.1f%% (ETA %s)", p.name, info.Progress*100, formatEta(info.Eta)))
+		rows = append(rows, DownloadRow{
+			Name:     p.name,
+			Progress: fmt.Sprintf("%.1f%%", info.Progress*100),
+			Eta:      formatEta(info.Eta),
+			Size:     formatSize(info.Completed) + "/" + formatSize(info.Size),
+			Conns:    fmt.Sprintf("%d(%d)/%d(%d)", info.NumSeeds, info.NumComplete, info.NumLeechs, info.NumIncomplete),
+			Speed:    formatSize(info.DlSpeed) + "/s",
+		})
 	}
 
 	//Apply updates to the live list by tag rather than overwriting it with the stale snapshot, so a
@@ -475,7 +511,7 @@ func pendingStatusLines() []string {
 	}
 	pending = filtered
 	pendingMu.Unlock()
-	return lines
+	return rows
 }
 
 func main() {
@@ -678,7 +714,7 @@ func main() {
 
 		json.NewEncoder(w).Encode(UpdatesResponse{
 			NewLogLines:      Lines,
-			CurrentDownloads: pendingStatusLines(),
+			CurrentDownloads: pendingStatusRows(),
 			NewLastLogLine:   NewLastLogLine,
 			ServerStartTime:  ServerStartTime,
 		})

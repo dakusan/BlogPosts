@@ -65,12 +65,13 @@ The program exits immediately (logging why) if the config file is missing/invali
 - Web client
 	- Served over HTTP on <kbd>listenOn</kbd>
 	- `GET /` serves a static page with two panels:
-		- A log panel
+		- Log panel
 			- Log lines are only ever appended (never cleared)
 			- Auto-scrolls to the bottom on new lines only if it was already scrolled to the bottom; otherwise its scroll position is left alone
 			- Takes up the rest of the screen that the downloads panel is not using
-		- A downloads panel
-			- Shows the live percent/ETA (queried from the qBittorrent WebUI API) of any torrents that were added and have not finished downloading yet
+		- Downloads panel
+			- Shows a table (Name/Progress/ETA/Size/Conns/Speed) of any torrents that were added and have not finished downloading yet, queried live from the qBittorrent WebUI API
+			- Columns are resized by dragging their edges; widths are remembered in the browser’s local storage.
 			- Grows to fit its content but always leaves room for at least ~3 log lines.
 		- These requests are logged as normal page loads
 	- The page polls `POST /Updates` every 5 seconds with the highest log line number it has

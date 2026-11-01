@@ -7,32 +7,107 @@
 html, body{ height:100%; margin:0; padding:0; font-size:14px; }
 body { display:flex; height:100vh; flex-direction:column; }
 #Logs { box-sizing:border-box; flex:1 1 auto; min-height:4.5em; padding:4px; overflow-y:scroll; }
-#Downloads { box-sizing:border-box; flex:0 0 auto; height:max-content; border-top:1px solid #888; padding:4px; overflow-y:auto; background-color:darkgrey; }
-#Logs>*:nth-child(even), #Downloads>*:nth-child(even) { background-color:lightgrey; }
+#Downloads { box-sizing:border-box; flex:0 0 auto; height:max-content; border-top:1px solid #888; padding:4px; overflow:auto; background-color:darkgrey; }
+#Logs>*:nth-child(even) { background-color:lightgrey; }
 .TimeStamp { margin-right:10px; padding:0 4px; background-color:#AACCCC; }
 #Logs>*:nth-child(even) .TimeStamp { background-color:darkcyan; }
+#DownloadsError { padding:4px; }
+#DownloadsTable { table-layout:fixed; border-collapse:collapse; }
+#DownloadsTable th, #DownloadsTable td { box-sizing:border-box; position:relative; padding:2px 6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border:1px solid black; }
+#DownloadsTable thead th { background-color:#666; color:#fff; text-align:left; font-weight:bold; }
+#DownloadsBody>tr:nth-child(even) { background-color:lightgrey; }
+.ColResizer { position:absolute; top:0; right:-3px; bottom:0; width:6px; cursor:col-resize; z-index:2; }
 		</style>
 	</head><body>
 		<div id=Logs></div>
-		<div id=Downloads></div>
+		<div id=Downloads>
+			<div id=DownloadsError style="display:none"></div>
+			<table id=DownloadsTable></table>
+		</div>
 		<script>
 let LastLogLine=-1;
 let ServerStartTime=0;
 const LogsEl=document.getElementById('Logs');
-const DownloadsEl = document.getElementById('Downloads');
+const DownloadsErrorEl=document.getElementById('DownloadsError');
+const DownloadsTableEl=document.getElementById('DownloadsTable');
 const TimeStampRegex=/^(\d{4}\/\d\d\/\d\d \d\d:\d\d:\d\d) /;
-function CreateEl(TheText) {
-	const NewDiv=document.createElement('div');
-	const Match=TheText.match(TimeStampRegex);
-	if(Match) {
-		const Span=document.createElement('span');
-		Span.className='TimeStamp';
-		Span.textContent=Match[1];
-		NewDiv.append(Span, TheText.slice(Match[0].length));
-	} else
-		NewDiv.textContent=TheText;
-	return NewDiv;
+function CreateEl(TheText, ElType='div') {
+	const NewEl=document.createElement(ElType);
+	let Match;
+	NewEl.textContent=TheText;
+	if(ElType!=='div' || !(Match=TheText.match(TimeStampRegex)))
+		return NewEl;
+
+	const Span=CreateEl(Match[1], 'span');
+	Span.className='TimeStamp';
+	NewEl.replaceChildren(Span, TheText.slice(Match[0].length));
+	return NewEl;
 }
+
+//Downloads table: fixed-width, user-resizable columns, persisted to localStorage
+const Columns={
+	Name:     {Label:'Name',     Default:451},
+	Progress: {Label:'Progress', Default:67},
+	Eta:      {Label:'ETA',      Default:85},
+	Size:     {Label:'Size',     Default:157},
+	Conns:    {Label:'Conns',    Default:108},
+	Speed:    {Label:'Speed',    Default:100},
+};
+const ColumnWidthsStorageKey='AddTorrent_DownloadsColumnWidths';
+
+function LoadColumnWidths() {
+	try { return JSON.parse(localStorage.getItem(ColumnWidthsStorageKey)) || {}; }
+	catch(e) { return {}; }
+}
+function ApplyTableWidth() {
+	const Keys=Object.keys(Columns);
+	let Total=0;
+	for(const Key of Keys)
+		Total+=parseFloat(Columns[Key].El.style.width) || Columns[Key].Default;
+	DownloadsTableEl.style.width=(Total+Keys.length+1)+'px';
+}
+function StartResize(StartEvent, Col) {
+	StartEvent.preventDefault();
+	const StartX=StartEvent.clientX;
+	const StartWidth=parseFloat(Col.El.style.width);
+	function OnMove(MoveEvent) {
+		Col.El.style.width=Math.max(40, StartWidth+(MoveEvent.clientX-StartX))+'px';
+		ApplyTableWidth();
+	}
+	function OnUp() {
+		window.removeEventListener('mousemove', OnMove);
+		window.removeEventListener('mouseup', OnUp);
+		const Widths={};
+		for(const Key in Columns)
+			Widths[Key]=parseFloat(Columns[Key].El.style.width);
+		localStorage.setItem(ColumnWidthsStorageKey, JSON.stringify(Widths));
+	}
+	window.addEventListener('mousemove', OnMove);
+	window.addEventListener('mouseup', OnUp);
+}
+const SavedWidths=LoadColumnWidths();
+const ColGroupEl=document.createElement('colgroup');
+const HeadRowEl=document.createElement('tr');
+for(const Key in Columns) {
+	const Col=Columns[Key];
+	Col.El=document.createElement('col');
+	Col.El.style.width=(SavedWidths[Key] || Col.Default)+'px';
+	ColGroupEl.append(Col.El);
+
+	const ThEl=CreateEl(Col.Label, 'th');
+	const ResizerEl=document.createElement('div');
+	ResizerEl.className='ColResizer';
+	ResizerEl.addEventListener('mousedown', StartEvent => StartResize(StartEvent, Col));
+	ThEl.append(ResizerEl);
+	HeadRowEl.append(ThEl);
+}
+const TheadEl=document.createElement('thead');
+TheadEl.append(HeadRowEl);
+const DownloadsBodyEl=document.createElement('tbody');
+DownloadsBodyEl.id='DownloadsBody';
+DownloadsTableEl.append(ColGroupEl, TheadEl, DownloadsBodyEl);
+ApplyTableWidth();
+
 function Poll() {
 	const Controller=new AbortController();
 	const AbortTimer=setTimeout(() => Controller.abort(), 3000);
@@ -42,8 +117,10 @@ function Poll() {
 		body	:JSON.stringify({LastLogLine, ServerStartTime}),
 		signal	:Controller.signal,
 	}).then(function(r) { return r.json(); }).then(function(Data) {
+		DownloadsErrorEl.style.display=Data.Error ? 'block' : 'none';
+		DownloadsTableEl.style.display=Data.Error ? 'none' : '';
 		if(Data.Error)
-			return DownloadsEl.replaceChildren(CreateEl(Data.Error));
+			return DownloadsErrorEl.textContent=Data.Error;
 
 		ServerStartTime=Data.ServerStartTime;
 		if(Data.NewLogLines && Data.NewLogLines.length>0) {
@@ -53,7 +130,12 @@ function Poll() {
 			if(WasAtBottom)
 				LogsEl.scrollTop=LogsEl.scrollHeight;
 		}
-		DownloadsEl.replaceChildren(...(Data.CurrentDownloads || []).map(TheText => CreateEl(TheText)));
+		DownloadsBodyEl.replaceChildren(...(Data.CurrentDownloads || []).map(Row => {
+			const TrEl=document.createElement('tr');
+			for(const Key in Columns)
+				TrEl.append(CreateEl(Row[Key], 'td'));
+			return TrEl;
+		}));
 	}).catch(function() {
 		//Network error, bad JSON, or the 3-second abort firing - just move on to the next poll
 	}).finally(function() {

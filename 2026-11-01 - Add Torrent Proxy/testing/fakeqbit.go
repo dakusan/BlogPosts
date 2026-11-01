@@ -14,6 +14,8 @@ package main
 //    would eventually produce.
 //  - /api/v2/torrents/info?tag=X reports live progress/eta computed from elapsed wall-clock time since
 //    the add, so AddTorrent.go's normal polling sees a realistic ramp from 0 to 1 over DownloadSeconds.
+//    size/completed/dlspeed are derived from SimulatedTotalSize; num_seeds/num_complete/num_leechs/
+//    num_incomplete are fixed placeholder values - just enough to exercise the Downloads table columns.
 //  - /api/v2/torrents/deleteTags removes the record (mirrors real behavior; AddTorrent.go calls this
 //    once a torrent is finished or given up on).
 
@@ -45,6 +47,9 @@ var (
 )
 
 var DownloadSeconds float64
+
+//SimulatedTotalSize is the fake torrent size (bytes) used to synthesize the size/completed/dlspeed fields
+const SimulatedTotalSize int64 = 500 * 1024 * 1024
 
 func main() {
 	ListenOn := flag.String("listenOn", ":18080", "Address to listen on")
@@ -135,7 +140,17 @@ func HandleInfo(W http.ResponseWriter, R *http.Request) {
 	Elapsed := time.Since(Torrent.StartTime).Seconds()
 	Progress := min(1, Elapsed/DownloadSeconds)
 	Eta := int64(max(0, DownloadSeconds-Elapsed))
-	json.NewEncoder(W).Encode([]map[string]any{{"progress": Progress, "eta": Eta}})
+	json.NewEncoder(W).Encode([]map[string]any{{
+		"progress":       Progress,
+		"eta":            Eta,
+		"completed":      int64(Progress * float64(SimulatedTotalSize)),
+		"size":           SimulatedTotalSize,
+		"num_seeds":      3,
+		"num_complete":   10,
+		"num_leechs":     2,
+		"num_incomplete": 5,
+		"dlspeed":        int64(float64(SimulatedTotalSize) / DownloadSeconds),
+	}})
 }
 
 func HandleDeleteTags(W http.ResponseWriter, R *http.Request) {
