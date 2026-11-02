@@ -1,0 +1,70 @@
+#!/bin/bash
+set -e
+
+if [[ $# -lt 2 || "$2" != *:* ]]; then
+	echo "Usage: $0 <local_path> <user@host:/remote/path> [sshfs_option...]" >&2
+	echo "If no sshfs_options are given, '-o allow_other' is assumed if the remote host has it enabled." >&2
+	exit 1
+fi
+
+LOCAL_PATH=$(realpath "$1")
+REMOTE_HOST=${2%%:*}
+REMOTE_PATH=${2#*:}
+shift 2
+SSHFS_ARGS=("$@")
+
+if [[ ! -d "$LOCAL_PATH" ]]; then
+	echo "Local directory does not exist: $LOCAL_PATH" >&2
+	exit 1
+fi
+
+# Quote arguments for the remote shell
+quote() {
+	printf "'%s'" "${1//\'/\'\\\'\'}"
+}
+
+# With no explicit sshfs options, default to "-o allow_other", but only if the
+# remote's FUSE config permits it (otherwise sshfs would just fail to mount).
+# This check runs as part of REMOTE_COMMAND itself so it only needs one connection.
+if [[ ${#SSHFS_ARGS[@]} -eq 0 ]]; then
+	SSHFS_OPTS='$(grep -qE "^[[:space:]]*user_allow_other" /etc/fuse.conf && echo -o allow_other)'
+else
+	SSHFS_ARGS_QUOTED=()
+	for arg in "${SSHFS_ARGS[@]}"; do
+		SSHFS_ARGS_QUOTED+=("$(quote "$arg")")
+	done
+	SSHFS_OPTS="${SSHFS_ARGS_QUOTED[*]}"
+fi
+
+REMOTE_COMMAND="mkdir -p -- $(quote "$REMOTE_PATH") && exec sshfs :/share $(quote "$REMOTE_PATH") -o passive -f $SSHFS_OPTS"
+
+dpipe bwrap \
+	--unshare-all \
+	--new-session \
+	--die-with-parent \
+	--ro-bind /usr /usr \
+	--ro-bind /lib /lib \
+	--ro-bind /lib64 /lib64 \
+	--ro-bind /bin /bin \
+	--ro-bind /etc/passwd /etc/passwd \
+	--ro-bind /etc/group /etc/group \
+	--bind "$LOCAL_PATH" /share \
+	--dev /dev \
+	--chdir /share \
+	/usr/lib/openssh/sftp-server \
+	= ssh "$REMOTE_HOST" "$REMOTE_COMMAND" &
+PIPE_PID=$!
+
+cleanup() {
+	if ssh "$REMOTE_HOST" "mountpoint -q $(quote "$REMOTE_PATH") && fusermount3 -u $(quote "$REMOTE_PATH")"; then
+		trap - INT TERM
+	else
+		echo "Unmount failed. Connection remains active. Press Ctrl+C to retry, or use SIGKILL to force termination." >&2
+	fi
+}
+
+trap cleanup INT TERM
+
+while kill -0 "$PIPE_PID" 2>/dev/null; do
+	wait "$PIPE_PID" || true
+done
