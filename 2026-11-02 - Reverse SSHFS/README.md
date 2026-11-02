@@ -74,11 +74,11 @@ This is a filesystem isolation mechanism, not a guarantee against every possible
 
 ## Troubleshooting
 
-**`allow_other` permission denied**
+**<ins>`allow_other` permission denied</ins>**
 
 Enable `user_allow_other` in `/etc/fuse.conf` on the remote machine.
 
-**Remote mount is unresponsive**
+**<ins>Remote mount is unresponsive</ins>**
 
 Verify that the SSH connection is still active. An interrupted transport may require manually unmounting the remote filesystem:
 
@@ -86,7 +86,7 @@ Verify that the SSH connection is still active. An interrupted transport may req
 fusermount3 -u /remote/path
 ```
 
-**Mount remains busy**
+**<ins>Mount remains busy</ins>**
 
 Close applications accessing the mounted directory, then retry the unmount.
 
