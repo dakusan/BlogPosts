@@ -17,7 +17,7 @@ if [ ! -f config.json ]; then
 	${EDITOR:-nano} config.json
 fi
 
-go build AddTorrent.go
+go build -o AddTorrent .
 ```
 
 ## Run
@@ -25,7 +25,7 @@ go build AddTorrent.go
 Make sure the config file is set up first (See compile)
 
 If the executable is already compiled: `./AddTorrent`
-Otherwise: `go run AddTorrent.go`
+Otherwise: `go run .`
 
 ## Settings
 

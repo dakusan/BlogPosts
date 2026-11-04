@@ -125,7 +125,7 @@ def CheckLogOrder(LogPath, Expected):
 
 def Main():
 	print("Building AddTorrent...")
-	RunCmd(["go", "build", "-o", os.path.join(RepoRoot, "AddTorrent"), os.path.join(RepoRoot, "AddTorrent.go")])
+	RunCmd(["go", "build", "-o", os.path.join(RepoRoot, "AddTorrent"), RepoRoot])
 	print("Building fakeqbit...")
 	RunCmd(["go", "build", "-o", os.path.join(ScriptDir, "fakeqbit"), os.path.join(ScriptDir, "fakeqbit.go")])
 
