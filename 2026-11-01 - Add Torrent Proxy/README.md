@@ -51,7 +51,10 @@ The program exits immediately (logging why) if the config file is missing/invali
 
 ## What it does
 
-- Logs into the qBittorrent WebUI at startup; if that fails (or later requests start failing), a background goroutine retries the login every 15 seconds.
+- Logs into the qBittorrent WebUI at startup, then hands off to a background goroutine that monitors it:
+	- If there are no pending torrents: it’s fully idle.
+	- If there are pending torrents, and it’s disconnected: retries the login every 5 seconds.
+	- If there are pending torrents, and it’s connected: polls all of their progress in a single batched request every 2 seconds.
 	- “Connected”/“Lost connection” is only logged on the actual lost/regained transition, not on every retry.
 - Recursively watches <kbd>root</kbd> for filesystem events using fsnotify, adding watches to any new subdirectories as they appear.
 	- Symlinks are never followed
@@ -61,7 +64,7 @@ The program exits immediately (logging why) if the config file is missing/invali
 	- Mirrors the directory structure under <kbd>newRoot</kbd>, creating directories as needed. The resulting path is re-checked to confirm it still falls under <kbd>newRoot</kbd> before anything is written.
 	- Waits 3 seconds (to let the source file finish being written), then copies the file to its new location under <kbd>newRoot</kbd>.
 	- Once copied, the original file is moved (renamed) into <kbd>doneDir</kbd>, or deleted if <kbd>doneDir</kbd> is empty.
-	- If the file is a “.torrent” file, adds it to qBittorrent via its WebUI API (<kbd>qbitURL</kbd>) with the save path set to the new directory and a unique tag so its progress can be tracked, and logs whether the add succeeded or failed.
+	- If the file is a “.torrent” file, adds it to qBittorrent via its WebUI API (<kbd>qbitURL</kbd>) with the save path set to the new directory and a shared tag (so the background monitor can find every pending torrent in one request), and logs whether the add succeeded or failed.
 - Web client
 	- Served over HTTP on <kbd>listenOn</kbd>
 	- `GET /` serves a static page with two panels:

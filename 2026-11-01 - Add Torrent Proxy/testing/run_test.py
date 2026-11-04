@@ -4,9 +4,10 @@ End-to-end test for AddTorrent.
 
 Builds AddTorrent and the fake qBittorrent server (fakeqbit.go), runs them both against a temporary
 workspace, drops several fake .torrent files (each containing a random 8-character token as its
-content), and simulates a browser by polling /Updates throughout the run (AddTorrent only logs
-"Finished downloading"/cleans up a tag when something actually polls /Updates - there's no background
-timer for that on its own).
+content), and simulates a browser by polling /Updates throughout the run - this exercises the polling
+endpoint itself (and the page-load log line), but isn't load-bearing for progress tracking: AddTorrent's
+own background qbitMonitor goroutine polls qBittorrent and logs "Finished downloading"/untags completed
+torrents on its own schedule, independent of whether anything is polling /Updates.
 
 At the end it checks:
   - The expected output files exist in the right places with the right content (original .torrent gone
@@ -42,7 +43,7 @@ DownloadSeconds = 20
 Stagger = 5  #seconds between each fake torrent being dropped
 PollInterval = 1  #how often we (as a stand-in browser) poll /Updates
 DebounceMargin = 3 + 2  #ProcessFile's own 3s "let the file finish writing" sleep, plus safety margin
-FinishMargin = 2 * PollInterval + 5  #extra time to wait after a fake download completes, so our poller has a chance to notice it
+FinishMargin = 2 * PollInterval + 5  #extra time to wait after a fake download completes, so AddTorrent's own qbitMonitor goroutine (ticks every 2s) has a chance to notice and log it
 
 #(Category, Show, Filename) for each fake torrent, in drop order
 Torrents = [
@@ -220,7 +221,7 @@ def Main():
 		Deadline = LastFinishEstimate + 30  #extra safety margin on top of our own estimate
 		while time.time() < Deadline and not os.path.exists(LastOutputFile):
 			time.sleep(1)
-		#Give the poller a final chance to notice the last completion before we stop it
+		#Give qbitMonitor a final chance to notice and log the last completion before we stop everything
 		time.sleep(FinishMargin)
 
 		#One plain page load, to exercise/verify that path too

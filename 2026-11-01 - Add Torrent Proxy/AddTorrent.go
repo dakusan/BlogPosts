@@ -208,17 +208,40 @@ func qbitMarkDisconnected(err error) {
 	}
 }
 
-//qbitMonitor keeps the qBittorrent WebUI session alive, retrying the login every 15 seconds while disconnected
+//QbitManagedTag is applied to every torrent this tool adds to qBittorrent for as long as it’s still downloading
+const QbitManagedTag = "TorrentProxyManaged"
+
+//QbitWake lets ProcessFile wake qbitMonitor immediately after adding a torrent
+var QbitWake = make(chan struct{}, 1)
+
+//qbitMonitor is the sole background goroutine that talks to qBittorrent outside of the initial add in ProcessFile.
+//It keeps the WebUI session alive, and while at least one torrent is pending, polls progress for all of them in a single batched request every 2 seconds.
+//It idles (blocked on QbitWake) whenever nothing is pending, rather than polling an always-empty list.
 func qbitMonitor() {
+	Known := map[string]string{} //hash -> name, for torrents we’ve seen with progress<1; local to this goroutine, no lock needed
+	var LastLoginAttempt time.Time
 	for {
+		if len(Known) == 0 {
+			<-QbitWake //nothing pending - block until ProcessFile adds something
+		}
+
 		qbitStateMu.Lock()
 		connected := qbitConnected
 		qbitStateMu.Unlock()
 
 		if !connected {
-			qbitLogin()
+			if time.Since(LastLoginAttempt) >= 5*time.Second {
+				LastLoginAttempt = time.Now()
+				qbitLogin()
+			}
+		} else {
+			refreshDownloads(Known)
 		}
-		time.Sleep(15 * time.Second)
+
+		select {
+		case <-QbitWake:
+		case <-time.After(2 * time.Second):
+		}
 	}
 }
 
@@ -344,6 +367,8 @@ func qbitAddTorrent(torrentPath, savePath, tag string) error {
 
 //qbitTorrentInfo mirrors the fields we need from the qBittorrent WebUI’s /api/v2/torrents/info response
 type qbitTorrentInfo struct {
+	Hash          string  `json:"hash"`
+	Name          string  `json:"name"`
 	Progress      float64 `json:"progress"`
 	Eta           int64   `json:"eta"`
 	Completed     int64   `json:"completed"`
@@ -355,8 +380,8 @@ type qbitTorrentInfo struct {
 	DlSpeed       int64   `json:"dlspeed"`
 }
 
-//qbitTorrentByTag looks up the (single) torrent with the given unique tag, returning nil if none is found
-func qbitTorrentByTag(tag string) (*qbitTorrentInfo, error) {
+//qbitTorrentsByTag returns every torrent currently carrying tag, in a single request
+func qbitTorrentsByTag(tag string) ([]qbitTorrentInfo, error) {
 	resp, err := qbitDo(func() (*http.Request, error) {
 		return http.NewRequest("GET", cfg.QbitURL+"/api/v2/torrents/info?tag="+url.QueryEscape(tag), nil)
 	})
@@ -369,18 +394,13 @@ func qbitTorrentByTag(tag string) (*qbitTorrentInfo, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&infos); err != nil {
 		return nil, err
 	}
-	if len(infos) == 0 {
-		return nil, nil
-	}
-	return &infos[0], nil
+	return infos, nil
 }
 
-//qbitDeleteTag removes tag from qBittorrent entirely. Each tag is unique to the one torrent it was
-//created for, so this doesn’t affect anything else; it just keeps qBittorrent’s tag list from
-//accumulating one orphaned entry per torrent ever added forever.
-func qbitDeleteTag(tag string) error {
+//qbitRemoveTag removes tag from the torrent identified by hash
+func qbitRemoveTag(hash, tag string) error {
 	resp, err := qbitDo(func() (*http.Request, error) {
-		req, err := http.NewRequest("POST", cfg.QbitURL+"/api/v2/torrents/deleteTags", strings.NewReader(url.Values{"tags": {tag}}.Encode()))
+		req, err := http.NewRequest("POST", cfg.QbitURL+"/api/v2/torrents/removeTags", strings.NewReader(url.Values{"hashes": {hash}, "tags": {tag}}.Encode()))
 		if err != nil {
 			return nil, err
 		}
@@ -393,28 +413,9 @@ func qbitDeleteTag(tag string) error {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("deleteTags rejected (status %d): %s", resp.StatusCode, string(body))
+		return fmt.Errorf("removeTags rejected (status %d): %s", resp.StatusCode, string(body))
 	}
 	return nil
-}
-
-//pendingTorrent tracks a torrent added to qBittorrent whose progress is still shown on the log page
-type pendingTorrent struct {
-	tag    string
-	name   string
-	misses int //consecutive failed/not-found lookups, used to eventually give up on stale entries
-}
-
-var (
-	pendingMu sync.Mutex
-	pending   []pendingTorrent
-)
-
-//addPending registers a newly-added torrent so its progress is shown on the log page until it finishes
-func addPending(tag, name string) {
-	pendingMu.Lock()
-	defer pendingMu.Unlock()
-	pending = append(pending, pendingTorrent{tag: tag, name: name})
 }
 
 //formatEta renders a qBittorrent eta (seconds, or 8640000 for “unknown”) as a human-readable duration
@@ -425,7 +426,7 @@ func formatEta(seconds int64) string {
 	return (time.Duration(seconds) * time.Second).Round(time.Second).String()
 }
 
-//formatSize renders a byte count as "#.##LL" (2 decimals, binary units: B/KB/MB/GB/TB/PB)
+//formatSize renders a byte count as “#.##LL” (2 decimals, binary units: B/KB/MB/GB/TB/PB)
 func formatSize(bytes int64) string {
 	units := [...]string{"B", "KB", "MB", "GB", "TB", "PB"}
 	size := float64(bytes)
@@ -447,71 +448,56 @@ type DownloadRow struct {
 	Speed    string `json:"Speed"`
 }
 
-//pendingUpdate is the outcome of checking one pending torrent’s progress, applied back to the live list by tag
-type pendingUpdate struct {
-	remove bool
-	misses int
-}
+//CurrentDownloads is read by the /Updates handler and written only by refreshDownloads (from qbitMonitor), so
+//handlers never block on - or trigger - a qBittorrent request themselves.
+var (
+	DownloadsMu      sync.Mutex
+	CurrentDownloads []DownloadRow
+)
 
-//pendingStatusRows queries qBittorrent for the live progress/stats of every pending torrent, dropping any that have finished or gone stale
-func pendingStatusRows() []DownloadRow {
-	pendingMu.Lock()
-	snapshot := append([]pendingTorrent(nil), pending...)
-	pendingMu.Unlock()
+//refreshDownloads makes one batched query for every torrent carrying QbitManagedTag and updates Known (hash -> name, mutated in place) to reflect what’s still pending, and publishes the resulting rows for /Updates to read.
+func refreshDownloads(Known map[string]string) {
+	Infos, err := qbitTorrentsByTag(QbitManagedTag)
+	if err != nil {
+		log.Println("Warning: could not query qbittorrent for managed torrents: ", err)
+		return //leave Known/CurrentDownloads untouched; retried on the next tick
+	}
 
-	var rows []DownloadRow
-	updates := make(map[string]pendingUpdate, len(snapshot))
-	for _, p := range snapshot {
-		info, err := qbitTorrentByTag(p.tag)
-		if err != nil || info == nil {
-			misses := p.misses + 1
-			if misses < 5 {
-				updates[p.tag] = pendingUpdate{misses: misses}
-				rows = append(rows, DownloadRow{Name: p.name, Progress: "status unknown", Eta: "-", Size: "-", Conns: "-", Speed: "-"})
-			} else {
-				updates[p.tag] = pendingUpdate{remove: true}
-				log.Println("Gave up tracking progress for: ", p.name)
-				if err := qbitDeleteTag(p.tag); err != nil {
-					log.Println("Warning: could not delete tag for “"+p.name+"”: ", err)
-				}
+	Seen := make(map[string]bool, len(Infos))
+	var Rows []DownloadRow
+	for _, Info := range Infos {
+		Seen[Info.Hash] = true
+		if Info.Progress >= 1 {
+			log.Println("Finished downloading: ", Info.Name)
+			if err := qbitRemoveTag(Info.Hash, QbitManagedTag); err != nil {
+				log.Println("Warning: could not remove tag for “"+Info.Name+"”: ", err)
 			}
-			continue
-		}
-		if info.Progress >= 1 {
-			updates[p.tag] = pendingUpdate{remove: true}
-			log.Println("Finished downloading: ", p.name)
-			if err := qbitDeleteTag(p.tag); err != nil {
-				log.Println("Warning: could not delete tag for “"+p.name+"”: ", err)
-			}
+			delete(Known, Info.Hash)
 			continue //finished downloading, drop it
 		}
-		updates[p.tag] = pendingUpdate{misses: 0}
-		rows = append(rows, DownloadRow{
-			Name:     p.name,
-			Progress: fmt.Sprintf("%.1f%%", info.Progress*100),
-			Eta:      formatEta(info.Eta),
-			Size:     formatSize(info.Completed) + "/" + formatSize(info.Size),
-			Conns:    fmt.Sprintf("%d(%d)/%d(%d)", info.NumSeeds, info.NumComplete, info.NumLeechs, info.NumIncomplete),
-			Speed:    formatSize(info.DlSpeed) + "/s",
+		Known[Info.Hash] = Info.Name
+		Rows = append(Rows, DownloadRow{
+			Name:     Info.Name,
+			Progress: fmt.Sprintf("%.1f%%", Info.Progress*100),
+			Eta:      formatEta(Info.Eta),
+			Size:     formatSize(Info.Completed) + "/" + formatSize(Info.Size),
+			Conns:    fmt.Sprintf("%d(%d)/%d(%d)", Info.NumSeeds, Info.NumComplete, Info.NumLeechs, Info.NumIncomplete),
+			Speed:    formatSize(Info.DlSpeed) + "/s",
 		})
 	}
 
-	//Apply updates to the live list by tag rather than overwriting it with the stale snapshot, so a
-	//torrent added concurrently (while the qBittorrent lookups above were in flight) isn’t lost.
-	pendingMu.Lock()
-	filtered := make([]pendingTorrent, 0, len(pending))
-	for _, p := range pending {
-		if u, ok := updates[p.tag]; ok {
-			if u.remove {
-				continue
-			}
-			p.misses = u.misses
+	//Anything we were tracking that didn’t come back this time was removed from qBittorrent by something
+	//other than us - we only ever remove QbitManagedTag ourselves, right above, on a successful finish
+	for Hash, Name := range Known {
+		if !Seen[Hash] {
+			log.Println("Gave up tracking (no longer found in qbittorrent): ", Name)
+			delete(Known, Hash)
 		}
-		filtered = append(filtered, p)
 	}
-	pending = filtered
-	pendingMu.Unlock()
-	return rows
+
+	DownloadsMu.Lock()
+	CurrentDownloads = Rows
+	DownloadsMu.Unlock()
 }
 
 func main() {
@@ -586,7 +572,7 @@ func main() {
 	LogBuf := &LogRingBuffer{Lines: make([]string, *maxLogLinesFlag)}
 	log.SetOutput(LogBuf)
 
-	//Log into the qBittorrent WebUI, then keep retrying every 15 seconds in the background if disconnected
+	//Log into the qBittorrent WebUI, then hand off session keep-alive and download progress monitoring to qbitMonitor
 	qbitLogin()
 	go qbitMonitor()
 
@@ -712,9 +698,13 @@ func main() {
 			Lines = append([]string{time.Now().Format("2006/01/02 15:04:05") + " Server was restarted; resyncing log"}, Lines...)
 		}
 
+		DownloadsMu.Lock()
+		Downloads := CurrentDownloads
+		DownloadsMu.Unlock()
+
 		json.NewEncoder(w).Encode(UpdatesResponse{
 			NewLogLines:      Lines,
-			CurrentDownloads: pendingStatusRows(),
+			CurrentDownloads: Downloads,
 			NewLastLogLine:   NewLastLogLine,
 			ServerStartTime:  ServerStartTime,
 		})
@@ -824,13 +814,15 @@ func ProcessFile(eventPath string) string {
 		return "Ignoring non-torrent file"
 	}
 
-	//Send the torrent to qbittorrent via the WebUI API
-	tag := fmt.Sprintf("AddTorrent-%d", time.Now().UnixNano())
-	if err := qbitAddTorrent(newDir+newFile, newDir, tag); err != nil {
+	//Send the torrent to qbittorrent via the WebUI API; qbitMonitor picks up progress/cleanup from here
+	if err := qbitAddTorrent(newDir+newFile, newDir, QbitManagedTag); err != nil {
 		return "Error adding torrent to qbittorrent: " + err.Error()
 	}
 	log.Println("Added to qbittorrent: ", newDir+newFile)
-	addPending(tag, newFile)
+	select {
+	case QbitWake <- struct{}{}:
+	default:
+	}
 
 	return "Success"
 }
