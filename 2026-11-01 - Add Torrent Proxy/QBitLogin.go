@@ -2,11 +2,9 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/http/cookiejar"
-	"net/url"
 	"strings"
 	"sync"
 )
@@ -54,18 +52,12 @@ func qbitLogin() error {
 	}
 	client := &http.Client{Jar: jar}
 
-	resp, err := client.PostForm(cfg.QbitURL+"/api/v2/auth/login", url.Values{
-		"username": {cfg.QbitUser},
-		"password": {cfg.QbitPass},
-	})
+	body, err := qbitApiCall(client, "POST", "/auth/login", map[string]string{"username": cfg.QbitUser, "password": cfg.QbitPass}, []string{"password"})
 	if err != nil {
-		qbitMarkDisconnected(err)
 		return err
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if strings.TrimSpace(string(body)) != "Ok." {
-		err := fmt.Errorf("login rejected (status %d): %s", resp.StatusCode, string(body))
+	if strings.TrimSpace(body) != "Ok." {
+		err := fmt.Errorf("login rejected: %s", body)
 		qbitMarkDisconnected(err)
 		return err
 	}

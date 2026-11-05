@@ -182,7 +182,7 @@ func HandleInfo(W http.ResponseWriter, R *http.Request) {
 }
 
 func HandleRemoveTags(W http.ResponseWriter, R *http.Request) {
-	if Err := R.ParseForm(); Err != nil {
+	if Err := R.ParseMultipartForm(10 << 20); Err != nil {
 		http.Error(W, Err.Error(), http.StatusBadRequest)
 		return
 	}
