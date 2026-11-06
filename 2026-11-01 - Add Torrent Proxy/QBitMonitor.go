@@ -30,10 +30,13 @@ var QbitWake = make(chan struct{}, 1)
 //It idles (blocked on QbitWake) whenever nothing is pending, rather than polling an always-empty list.
 func qbitMonitor() {
 	Known := map[string]string{} //hash -> name, for torrents we’ve seen with progress<1; local to this goroutine, no lock needed
+
+	HaveTorrents := false
 	var LastLoginAttempt time.Time
 	for {
-		if len(Known) == 0 {
+		if !HaveTorrents {
 			<-QbitWake //nothing pending - block until ProcessFile adds something
+			HaveTorrents = true
 		}
 
 		qbitStateMu.Lock()
@@ -45,12 +48,13 @@ func qbitMonitor() {
 				LastLoginAttempt = time.Now()
 				qbitLogin()
 			}
-		} else {
-			refreshDownloads(Known)
+		} else if refreshDownloads(Known) {
+			HaveTorrents = len(Known) > 0
 		}
 
 		select {
 		case <-QbitWake:
+			HaveTorrents = true
 		case <-time.After(2 * time.Second):
 		}
 	}
