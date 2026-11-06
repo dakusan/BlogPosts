@@ -177,6 +177,7 @@ def Main():
 				"-qbitPass", "testpass",
 				"-fileRegex", r"^[^/]+/.+/[^/]+$",
 				"-maxLogLines", str(MaxLogLines),
+				"-debug",
 			],
 			stdout=AddTorrentLog, stderr=subprocess.STDOUT, cwd=RepoRoot,
 		)

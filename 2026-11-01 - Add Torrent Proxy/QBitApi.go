@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -82,6 +85,31 @@ func qbitApiCall(client *http.Client, method, urlPath string, postBody map[strin
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
+	}
+
+	if Debug {
+		logBodyStr := "[]"
+		if len(postBody) > 0 {
+			displayBody := make(map[string]string, len(postBody))
+			for key, value := range postBody {
+				switch {
+				case strings.HasPrefix(key, "*"):
+					value = "<file: " + filepath.Base(value) + ">"
+				case slices.Contains(maskPostFields, key):
+					value = "***"
+				}
+				displayBody[strings.TrimPrefix(key, "*")] = value
+			}
+			if pretty, err := json.MarshalIndent(displayBody, "", "\t"); err == nil {
+				logBodyStr = string(pretty)
+			}
+		}
+		resultStr := string(body)
+		var pretty bytes.Buffer
+		if json.Indent(&pretty, body, "", "\t") == nil {
+			resultStr = pretty.String()
+		}
+		log.Printf("Debug: %s %s %s: %s", method, urlPath, logBodyStr, resultStr)
 	}
 
 	if resp.StatusCode != http.StatusOK {

@@ -31,6 +31,9 @@ var cfg Config
 var fileRegex *regexp2.Regexp
 var fileRegexBlacklist *regexp2.Regexp //nil when cfg.FileRegexBlacklist is empty, i.e. no blacklist
 
+//Debug enables logging of every qBittorrent connection attempt and API call
+var Debug bool
+
 //loadConfig reads and parses the JSONC (JSON with // and /* */ comments allowed) config file at path, erroring if it is missing or invalid
 func loadConfig(path string) (Config, error) {
 	data, err := os.ReadFile(path)
@@ -73,7 +76,9 @@ func parseConfigAndFlags() int {
 	fileRegexFlag := flag.String("fileRegex", "", "Override: a regex that a new file’s path, relative to root, must match to trigger actions.")
 	fileRegexBlacklistFlag := flag.String("fileRegexBlacklist", "", "Override: a regex that, if matched, excludes an otherwise-matching file (empty disables the blacklist)")
 	maxLogLinesFlag := flag.Int("maxLogLines", DefaultMaxLogLines, "Number of most-recent log lines to retain in memory; not part of config.json, mainly for testing with a small buffer")
+	debugFlag := flag.Bool("debug", false, "Log every qbittorrent connection attempt and API call (request/response, pretty-printed if JSON); not part of config.json")
 	flag.Parse()
+	Debug = *debugFlag
 
 	if *maxLogLinesFlag <= 0 {
 		log.Fatal("Error: -maxLogLines must be positive")
