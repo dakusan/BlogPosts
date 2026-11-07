@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sync/atomic"
 	"time"
 )
 
@@ -25,6 +26,9 @@ const QbitManagedTag = "TorrentProxyManaged"
 //QbitWake lets ProcessFile wake qbitMonitor immediately after adding a torrent
 var QbitWake = make(chan struct{}, 1)
 
+//QbitPendingAdds counts torrents ProcessFile has told qBittorrent to add but qbitMonitor hasn’t yet seen come back from a tag query - qBittorrent can take a few seconds to index a freshly added torrent, so a query run right after an add can legitimately find nothing yet. Incremented by ProcessFile, decremented by qbitMonitor.
+var QbitPendingAdds atomic.Int64
+
 //qbitMonitor is the sole background goroutine that talks to qBittorrent outside of the initial add in ProcessFile.
 //It keeps the WebUI session alive, and while at least one torrent is pending, polls progress for all of them in a single batched request every 2 seconds.
 //It idles (blocked on QbitWake) whenever nothing is pending, rather than polling an always-empty list.
@@ -32,6 +36,7 @@ func qbitMonitor() {
 	Known := map[string]string{} //hash -> name, for torrents we’ve seen with progress<1; local to this goroutine, no lock needed
 
 	HaveTorrents := false
+	StaleCycles := 0 //consecutive confirmed-successful refreshes that found no newly-seen torrent while QbitPendingAdds was still >0; capped so an add that never shows up (e.g. silently rejected) can’t block idling forever
 	var LastLoginAttempt time.Time
 	for {
 		if !HaveTorrents {
@@ -48,8 +53,19 @@ func qbitMonitor() {
 				LastLoginAttempt = time.Now()
 				qbitLogin()
 			}
-		} else if refreshDownloads(Known) {
-			HaveTorrents = len(Known) > 0
+		} else if Ok, NewlySeen := refreshDownloads(Known); Ok {
+			if NewlySeen > 0 {
+				if QbitPendingAdds.Add(-int64(NewlySeen)) < 0 {
+					QbitPendingAdds.Store(0)
+				}
+				StaleCycles = 0
+			} else if QbitPendingAdds.Load() > 0 {
+				if StaleCycles++; StaleCycles >= 10 {
+					QbitPendingAdds.Store(0)
+					StaleCycles = 0
+				}
+			}
+			HaveTorrents = len(Known) > 0 || QbitPendingAdds.Load() > 0
 		}
 
 		select {

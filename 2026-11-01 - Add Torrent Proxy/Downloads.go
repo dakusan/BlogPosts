@@ -25,17 +25,21 @@ var (
 
 //refreshDownloads makes one batched query for every torrent carrying QbitManagedTag and updates Known (hash -> name, mutated in place) to reflect what’s still pending, and publishes the resulting rows for /Updates to read.
 //Ok is false only if the query itself failed (Known/CurrentDownloads are left untouched in that case); the caller (qbitMonitor) relies on this to tell “confirmed nothing pending” apart from “couldn’t check”.
-func refreshDownloads(Known map[string]string) (Ok bool) {
+//NewlySeen is how many returned torrents weren’t already in Known - i.e. how many outstanding qbitAddTorrent calls this confirms, since qBittorrent can take a few seconds to index a freshly added torrent and a query run right after an add can legitimately come back without it yet.
+func refreshDownloads(Known map[string]string) (Ok bool, NewlySeen int) {
 	Infos, err := qbitTorrentsByTag(QbitManagedTag)
 	if err != nil {
 		log.Println("Warning: could not query qbittorrent for managed torrents: ", err)
-		return false //leave Known/CurrentDownloads untouched; retried on the next tick
+		return false, 0 //leave Known/CurrentDownloads untouched; retried on the next tick
 	}
 
 	Seen := make(map[string]bool, len(Infos))
 	var Rows []DownloadRow
 	for _, Info := range Infos {
 		Seen[Info.Hash] = true
+		if _, WasKnown := Known[Info.Hash]; !WasKnown {
+			NewlySeen++
+		}
 		if Info.Progress >= 1 {
 			log.Println("Finished downloading: ", Info.Name)
 			if err := qbitRemoveTag(Info.Hash, QbitManagedTag); err != nil {
@@ -66,5 +70,5 @@ func refreshDownloads(Known map[string]string) (Ok bool) {
 	DownloadsMu.Lock()
 	CurrentDownloads = Rows
 	DownloadsMu.Unlock()
-	return true
+	return true, NewlySeen
 }

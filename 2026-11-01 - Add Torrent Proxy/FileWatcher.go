@@ -187,6 +187,7 @@ func ProcessFile(eventPath string) string {
 		return "Error adding torrent to qbittorrent: " + err.Error()
 	}
 	log.Println("Added to qbittorrent: ", newDir+newFile)
+	QbitPendingAdds.Add(1)
 	select {
 	case QbitWake <- struct{}{}:
 	default:
