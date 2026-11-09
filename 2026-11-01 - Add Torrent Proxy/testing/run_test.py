@@ -158,9 +158,8 @@ def Main():
 	FailureReason = ""
 	try:
 		#fakeqbit must already be accepting connections before AddTorrent's first (synchronous,
-		#startup-time) login attempt, or that attempt silently fails with no retry for 15 seconds
-		#(qbitMonitor only retries while disconnected; the very first failure logs nothing, since
-		#"Lost connection" is only logged on a connected->disconnected transition).
+		#startup-time) login attempt, or that attempt fails with no retry for ~15 seconds
+		#qbitMonitor doesn't retry the login itself until it's woken by the first torrent add.
 		if not WaitForUrl(f"http://127.0.0.1:{QbitPort}/api/v2/auth/login"):
 			raise RuntimeError("fakeqbit never came up")
 

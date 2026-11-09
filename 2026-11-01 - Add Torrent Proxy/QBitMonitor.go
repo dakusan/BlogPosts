@@ -85,7 +85,7 @@ func qbitMonitor() {
 		}
 
 		qbitStateMu.Lock()
-		connected := qbitConnected
+		connected := qbitState == qbitStateConnected
 		qbitStateMu.Unlock()
 
 		if !connected {
