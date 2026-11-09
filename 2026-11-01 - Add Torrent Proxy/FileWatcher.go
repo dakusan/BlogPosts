@@ -7,12 +7,48 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
 )
 
-//startFileWatcher creates the fsnotify watcher, starts watching cfg.Root recursively, and kicks off the event-loop goroutine. The caller is responsible for closing the returned watcher.
+//fileEventQueue is a FIFO of event paths waiting to be handed to ProcessFile. watchEvents enqueues into this unbounded queue instead of calling ProcessFile directly
+var (
+	fileEventQueueMu sync.Mutex
+	fileEventQueue   []string
+	fileEventWake    = make(chan struct{}, 1)
+)
+
+//enqueueFileEvent adds path to fileEventQueue and wakes processFileEvents if it’s idle
+func enqueueFileEvent(path string) {
+	fileEventQueueMu.Lock()
+	fileEventQueue = append(fileEventQueue, path)
+	fileEventQueueMu.Unlock()
+	select {
+	case fileEventWake <- struct{}{}:
+	default:
+	}
+}
+
+//processFileEvents is the sole caller of ProcessFile, taking paths off fileEventQueue one at a time in the order watchEvents saw them - this keeps ProcessFile calls strictly serial, same as before, just decoupled from how fast fsnotify’s own channel needs to be drained.
+func processFileEvents() {
+	for {
+		fileEventQueueMu.Lock()
+		if len(fileEventQueue) == 0 {
+			fileEventQueueMu.Unlock()
+			<-fileEventWake
+			continue
+		}
+		path := fileEventQueue[0]
+		fileEventQueue = fileEventQueue[1:]
+		fileEventQueueMu.Unlock()
+
+		log.Printf("Return for “%s”: %s\n", path, ProcessFile(path))
+	}
+}
+
+//startFileWatcher creates the fsnotify watcher, starts watching cfg.Root recursively, and kicks off the event-loop and file-processing goroutines. The caller is responsible for closing the returned watcher.
 func startFileWatcher() *fsnotify.Watcher {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -25,6 +61,7 @@ func startFileWatcher() *fsnotify.Watcher {
 	}
 
 	go watchEvents(watcher)
+	go processFileEvents()
 
 	return watcher
 }
@@ -95,8 +132,8 @@ func watchEvents(watcher *fsnotify.Watcher) {
 				break
 			}
 
-			//Process the new file
-			log.Printf("Return for “%s”: %s\n", event.Name, ProcessFile(event.Name))
+			//Hand the new file off to processFileEvents rather than processing it here, so this loop never blocks on ProcessFile and can keep draining fsnotify’s own event channel
+			enqueueFileEvent(event.Name)
 
 		case err, ok := <-watcher.Errors:
 			if !ok {
