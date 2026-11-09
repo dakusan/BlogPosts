@@ -70,7 +70,7 @@ func runHttpServer(LogBuf *LogRingBuffer) {
 
 		//Compile the lines
 		AfterLine := Req.LastLogLine
-		var NeedsReset=Req.ServerStartTime != 0 && Req.ServerStartTime != ServerStartTime //The client’s ServerStartTime doesn’t match ours so reset the current AfterLine and send an extra message to the client
+		var NeedsReset = Req.ServerStartTime != 0 && Req.ServerStartTime != ServerStartTime //The client’s ServerStartTime doesn’t match ours so reset the current AfterLine and send an extra message to the client
 		if NeedsReset {
 			AfterLine = -1
 		}
@@ -101,7 +101,7 @@ func runHttpServer(LogBuf *LogRingBuffer) {
 	}
 	go func() {
 		log.Println("Starting server")
- 		//ListenAndServe always returns a non-nil error; http.ErrServerClosed means Shutdown()
+		//ListenAndServe always returns a non-nil error; http.ErrServerClosed means Shutdown()
 		//was called deliberately (e.g. SIGTERM), so that case must not be treated as fatal.
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal("Server closed (" + err.Error() + ")")

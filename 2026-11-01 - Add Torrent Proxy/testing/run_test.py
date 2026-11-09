@@ -21,6 +21,7 @@ Prints PASS/FAIL and exits 0/1 accordingly. The web UI stays up for the whole ru
 http://127.0.0.1:<ADDTORRENT_PORT>/ in a browser while it's running to watch it live.
 """
 
+import argparse
 import base64
 import json
 import os
@@ -297,6 +298,14 @@ def Main():
 	print(f"\nWorkspace (logs, expected_log.json, output files): {Workspace}")
 	sys.exit(0 if Passed else 1)
 
+def ParseArgs():
+	Parser = argparse.ArgumentParser(description="End-to-end test for AddTorrent")
+	Parser.add_argument("--port", type=int, default=AddTorrentPort, help=f"Port for AddTorrent's web UI (default: {AddTorrentPort})")
+	Parser.add_argument("--qbit-port", type=int, default=QbitPort, help=f"Port for the fake qBittorrent server (default: {QbitPort})")
+	return Parser.parse_args()
 
 if __name__ == "__main__":
+	Args = ParseArgs()
+	AddTorrentPort = Args.port
+	QbitPort = Args.qbit_port
 	Main()
