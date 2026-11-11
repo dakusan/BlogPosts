@@ -71,13 +71,12 @@ func qbitResolvePendingTags(Infos []qbitTorrentInfo) {
 		return
 	}
 
-	type resolvedTag struct{ Tag, Hash string }
-	var Resolved []resolvedTag
+	var Resolved []string
 	for _, Info := range Infos {
 		for _, Tag := range strings.Split(Info.Tags, ",") {
 			if Tag = strings.TrimSpace(Tag); Tag != QbitManagedTag { //every managed torrent carries this tag, so it’s never worth a QbitPendingTags lookup
 				if _, Pending := QbitPendingTags[Tag]; Pending {
-					Resolved = append(Resolved, resolvedTag{Tag, Info.Hash})
+					Resolved = append(Resolved, Tag)
 					delete(QbitPendingTags, Tag)
 				}
 			}
@@ -95,10 +94,10 @@ func qbitResolvePendingTags(Infos []qbitTorrentInfo) {
 	}
 	QbitPendingTagsMu.Unlock()
 
-	for _, R := range Resolved {
+	for _, Tag := range Resolved {
 		go func() { //fire-and-forget: qbitMonitor’s own cycle shouldn’t block on this network call
-			if err := qbitRemoveTag(R.Hash, R.Tag); err != nil {
-				log.Println("Warning: could not remove pending tag “"+R.Tag+"”: ", err)
+			if err := qbitDeleteTag(Tag); err != nil {
+				log.Println("Warning: could not delete pending tag “"+Tag+"”: ", err)
 			}
 		}()
 	}

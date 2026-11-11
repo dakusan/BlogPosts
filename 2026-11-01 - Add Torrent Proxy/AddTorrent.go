@@ -17,4 +17,9 @@ func main() {
 	defer watcher.Close()
 
 	runHttpServer(LogBuf)
+
+	//On a clean shutdown, delete the managed-tag
+	if err := qbitDeleteTag(QbitManagedTag); err != nil {
+		log.Println("Warning: could not delete “"+QbitManagedTag+"” tag on shutdown: ", err)
+	}
 }

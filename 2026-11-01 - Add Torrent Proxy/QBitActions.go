@@ -38,3 +38,9 @@ func qbitRemoveTag(hash, tag string) error {
 	_, err := qbitApiCall(nil, "POST", "removeTags", map[string]string{"hashes": hash, "tags": tag}, nil)
 	return err
 }
+
+//qbitDeleteTag deletes tag entirely - from every torrent carrying it, and from qBittorrent’s tag list itself - rather than untagging one specific torrent. Used for the one-off pending tags: since each is unique to a single QbitPrepareAddTorrent call, there’s no torrent to preserve the tag on, and leaving the tag definition behind would accumulate a never-cleaned-up entry per add.
+func qbitDeleteTag(tag string) error {
+	_, err := qbitApiCall(nil, "POST", "deleteTags", map[string]string{"tags": tag}, nil)
+	return err
+}

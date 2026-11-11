@@ -21,6 +21,8 @@ package main
 //    this is what lets QbitPrepareAddTorrent's pending-tag matching be exercised by the test.
 //  - /api/v2/torrents/removeTags removes the given tags from the given hashes only (not a global tag
 //    deletion), mirroring real qBittorrent's per-torrent untagging.
+//  - /api/v2/torrents/deleteTags removes the given tags from every torrent that carries them, mirroring
+//    real qBittorrent's global tag deletion (no hashes param at all, unlike removeTags).
 
 import (
 	"crypto/rand"
@@ -68,6 +70,7 @@ func main() {
 	http.HandleFunc("/api/v2/torrents/add", HandleAdd)
 	http.HandleFunc("/api/v2/torrents/info", HandleInfo)
 	http.HandleFunc("/api/v2/torrents/removeTags", HandleRemoveTags)
+	http.HandleFunc("/api/v2/torrents/deleteTags", HandleDeleteTags)
 
 	log.Println("fakeqbit listening on", *ListenOn, "- simulated download time:", DownloadSeconds, "seconds")
 	log.Fatal(http.ListenAndServe(*ListenOn, nil))
@@ -214,5 +217,24 @@ func HandleRemoveTags(W http.ResponseWriter, R *http.Request) {
 	TorrentsMu.Unlock()
 
 	log.Println("Removed tags", TagsToRemove, "from", Hashes)
+	fmt.Fprint(W, "Ok.")
+}
+
+func HandleDeleteTags(W http.ResponseWriter, R *http.Request) {
+	if Err := R.ParseMultipartForm(10 << 20); Err != nil {
+		http.Error(W, Err.Error(), http.StatusBadRequest)
+		return
+	}
+	TagsToDelete := strings.Split(R.FormValue("tags"), ",")
+
+	TorrentsMu.Lock()
+	for _, Torrent := range Torrents {
+		for _, Tag := range TagsToDelete {
+			delete(Torrent.Tags, strings.TrimSpace(Tag))
+		}
+	}
+	TorrentsMu.Unlock()
+
+	log.Println("Deleted tags", TagsToDelete)
 	fmt.Fprint(W, "Ok.")
 }
