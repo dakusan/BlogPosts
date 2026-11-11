@@ -17,6 +17,8 @@ package main
 //    "any tag", matching real qBittorrent), with live progress/eta computed from elapsed wall-clock time
 //    since the add. size/completed/dlspeed are derived from SimulatedTotalSize; num_seeds/num_complete/
 //    num_leechs/num_incomplete are fixed placeholder values - just enough to exercise the Downloads table.
+//    tags is a comma-separated list of every tag currently on the torrent, matching real qBittorrent -
+//    this is what lets QbitPrepareAddTorrent's pending-tag matching be exercised by the test.
 //  - /api/v2/torrents/removeTags removes the given tags from the given hashes only (not a global tag
 //    deletion), mirroring real qBittorrent's per-torrent untagging.
 
@@ -148,23 +150,35 @@ func FinishDownload(Torrent *FakeTorrent) {
 func HandleInfo(W http.ResponseWriter, R *http.Request) {
 	Tag := R.URL.Query().Get("tag") //empty means "any tag", matching real qBittorrent
 
+	//TagsStr is joined here, under the lock, rather than re-reading Torrent.Tags later unprotected (it can be concurrently mutated by HandleRemoveTags)
+	type snapshotEntry struct {
+		Torrent *FakeTorrent
+		TagsStr string
+	}
 	TorrentsMu.Lock()
-	Snapshot := make([]*FakeTorrent, 0, len(Torrents))
+	Snapshot := make([]snapshotEntry, 0, len(Torrents))
 	for _, Torrent := range Torrents {
-		if Tag == "" || Torrent.Tags[Tag] {
-			Snapshot = append(Snapshot, Torrent)
+		if Tag != "" && !Torrent.Tags[Tag] {
+			continue
 		}
+		TagList := make([]string, 0, len(Torrent.Tags))
+		for T := range Torrent.Tags {
+			TagList = append(TagList, T)
+		}
+		Snapshot = append(Snapshot, snapshotEntry{Torrent, strings.Join(TagList, ",")})
 	}
 	TorrentsMu.Unlock()
 
 	Results := make([]map[string]any, 0, len(Snapshot))
-	for _, Torrent := range Snapshot {
+	for _, Entry := range Snapshot {
+		Torrent := Entry.Torrent
 		Elapsed := time.Since(Torrent.StartTime).Seconds()
 		Progress := min(1, Elapsed/DownloadSeconds)
 		Eta := int64(max(0, DownloadSeconds-Elapsed))
 		Results = append(Results, map[string]any{
 			"hash":           Torrent.Hash,
 			"name":           Torrent.Name,
+			"tags":           Entry.TagsStr,
 			"progress":       Progress,
 			"eta":            Eta,
 			"completed":      int64(Progress * float64(SimulatedTotalSize)),

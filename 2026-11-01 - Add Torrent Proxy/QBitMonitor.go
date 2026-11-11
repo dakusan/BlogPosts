@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"log"
+	"strings"
 	"sync"
 	"time"
 )
@@ -9,6 +12,7 @@ import (
 type qbitTorrentInfo struct {
 	Hash          string  `json:"hash"`
 	Name          string  `json:"name"`
+	Tags          string  `json:"tags"` //comma-separated
 	Progress      float64 `json:"progress"`
 	Eta           int64   `json:"eta"`
 	Completed     int64   `json:"completed"`
@@ -26,48 +30,81 @@ const QbitManagedTag = "TorrentProxyManaged"
 //QbitWake lets ProcessFile wake qbitMonitor immediately after adding a torrent
 var QbitWake = make(chan struct{}, 1)
 
-//QbitPendingAdds is a FIFO of timestamps, one per qbitAddTorrent call ProcessFile has made that qbitMonitor hasn’t yet seen confirmed by a tag query - qBittorrent can take a few seconds to index a freshly added torrent, so a query run right after an add can legitimately find nothing yet.
-//Each entry ages out independently (oldest first), so one add that never shows up (e.g. silently rejected) can’t be masked by unrelated add/confirm activity elsewhere in the queue, and a fresh add can’t inherit an older one’s accrued staleness.
+//QbitPendingTagMaxTries is how many refreshDownloads cycles (one per qbitMonitor tick, ~2s apart) a pending tag can go unmatched before it’s given up on
+const QbitPendingTagMaxTries = 10
+
+//QbitPendingTags maps each one-off pending tag currently awaiting confirmation to how many refreshDownloads cycles it’s gone unmatched so far. qbitResolvePendingTags (the only reader/resolver) removes an entry once it’s matched to a hash, or once it’s been given up on; 
+//qbitPendingTagCounter generates each entry’s unique tag suffix; it’s a plain int rather than an atomic, since every place that touches it already holds QbitPendingTagsMu.
 var (
-	QbitPendingAddsMu sync.Mutex
-	QbitPendingAdds   []time.Time
+	QbitPendingTagsMu     sync.Mutex
+	QbitPendingTags       = map[string]int{} //tag -> tries so far
+	qbitPendingTagCounter int
 )
 
-//QbitPendingAddStaleAfter is how long an entry can sit at the front of QbitPendingAdds unconfirmed before qbitMonitor gives up on it
-const QbitPendingAddStaleAfter = 20 * time.Second
+//QbitPrepareAddTorrent adds torrentPath to qBittorrent (saving to savePath), tagged with both QbitManagedTag and a one-off tag unique to this call, registers that tag for qbitMonitor’s regular polling to confirm later, then wakes qbitMonitor.
+func QbitPrepareAddTorrent(torrentPath, savePath string) error {
+	QbitPendingTagsMu.Lock()
+	qbitPendingTagCounter++
+	PendingTag := fmt.Sprintf("TorrentProxyPending_%d", qbitPendingTagCounter)
+	QbitPendingTags[PendingTag] = 0
+	QbitPendingTagsMu.Unlock()
 
-//QbitAddTorrent adds torrentPath to qBittorrent (saving to savePath, tagged with tag) and registers it in QbitPendingAdds so qbitMonitor knows to expect it, then wakes qbitMonitor.
-//The entry is registered before the underlying add call, not after it succeeds - otherwise qbitMonitor’s background poll could see the torrent (qBittorrent having already indexed it) and count it as confirmed before this function ever recorded that it was expecting it.
-//If the call fails the entry is removed (nothing will ever confirm an add that was never actually made); if it succeeds the entry’s timestamp is reset to now, so staleness is measured from “qBittorrent was actually asked” rather than from before this (possibly slow) call was even made.
-func QbitAddTorrent(torrentPath, savePath, tag string) error {
-	AddedAt := time.Now()
-	QbitPendingAddsMu.Lock()
-	QbitPendingAdds = append(QbitPendingAdds, AddedAt)
-	QbitPendingAddsMu.Unlock()
-
-	err := qbitAddTorrent(torrentPath, savePath, tag)
-
-	QbitPendingAddsMu.Lock()
-	for i, T := range QbitPendingAdds {
-		if T.Equal(AddedAt) {
-			if err != nil {
-				QbitPendingAdds = append(QbitPendingAdds[:i], QbitPendingAdds[i+1:]...)
-			} else {
-				QbitPendingAdds[i] = time.Now()
-			}
-			break
-		}
-	}
-	QbitPendingAddsMu.Unlock()
-
-	if err != nil {
+	if err := qbitAddTorrent(torrentPath, savePath, QbitManagedTag+","+PendingTag); err != nil {
+		QbitPendingTagsMu.Lock()
+		delete(QbitPendingTags, PendingTag)
+		QbitPendingTagsMu.Unlock()
 		return err
 	}
+
 	select {
 	case QbitWake <- struct{}{}:
 	default:
 	}
 	return nil
+}
+
+//qbitResolvePendingTags cross-references Infos - the same /info response refreshDownloads just fetched for QbitManagedTag - against QbitPendingTags. A pending tag found on a torrent is resolved: its one-off tag is removed, leaving QbitManagedTag intact for normal tracking. A pending tag not found this round moves one try closer to being given up on (logged, since nothing is waiting around to be told directly).
+func qbitResolvePendingTags(Infos []qbitTorrentInfo) {
+	QbitPendingTagsMu.Lock()
+	if len(QbitPendingTags) == 0 {
+		QbitPendingTagsMu.Unlock()
+		return
+	}
+
+	type resolvedTag struct{ Tag, Hash string }
+	var Resolved []resolvedTag
+	for _, Info := range Infos {
+		for _, Tag := range strings.Split(Info.Tags, ",") {
+			if Tag = strings.TrimSpace(Tag); Tag != QbitManagedTag { //every managed torrent carries this tag, so it’s never worth a QbitPendingTags lookup
+				if _, Pending := QbitPendingTags[Tag]; Pending {
+					Resolved = append(Resolved, resolvedTag{Tag, Info.Hash})
+					delete(QbitPendingTags, Tag)
+				}
+			}
+		}
+	}
+
+	var GivenUp []string
+	for Tag, Tries := range QbitPendingTags {
+		if Tries++; Tries >= QbitPendingTagMaxTries {
+			GivenUp = append(GivenUp, Tag)
+			delete(QbitPendingTags, Tag)
+		} else {
+			QbitPendingTags[Tag] = Tries
+		}
+	}
+	QbitPendingTagsMu.Unlock()
+
+	for _, R := range Resolved {
+		go func() { //fire-and-forget: qbitMonitor’s own cycle shouldn’t block on this network call
+			if err := qbitRemoveTag(R.Hash, R.Tag); err != nil {
+				log.Println("Warning: could not remove pending tag “"+R.Tag+"”: ", err)
+			}
+		}()
+	}
+	for _, Tag := range GivenUp {
+		log.Printf("Warning: qBittorrent never confirmed the torrent for pending tag “%s” after %d tries, giving up on it\n", Tag, QbitPendingTagMaxTries)
+	}
 }
 
 //qbitMonitor is the sole background goroutine that talks to qBittorrent outside of the initial add in ProcessFile.
@@ -93,17 +130,11 @@ func qbitMonitor() {
 				LastLoginAttempt = time.Now()
 				qbitLogin()
 			}
-		} else if Ok, NewlySeen := refreshDownloads(Known); Ok {
-			QbitPendingAddsMu.Lock()
-			if NewlySeen > len(QbitPendingAdds) {
-				NewlySeen = len(QbitPendingAdds)
-			}
-			QbitPendingAdds = QbitPendingAdds[NewlySeen:] //the NewlySeen oldest entries are assumed confirmed; which exact add matches which confirmation doesn’t matter, only that the count and remaining ages stay right
-			for len(QbitPendingAdds) > 0 && time.Since(QbitPendingAdds[0]) > QbitPendingAddStaleAfter {
-				QbitPendingAdds = QbitPendingAdds[1:]
-			}
-			HaveTorrents = len(Known) > 0 || len(QbitPendingAdds) > 0
-			QbitPendingAddsMu.Unlock()
+		} else if Ok := refreshDownloads(Known); Ok {
+			QbitPendingTagsMu.Lock()
+			PendingCount := len(QbitPendingTags)
+			QbitPendingTagsMu.Unlock()
+			HaveTorrents = len(Known) > 0 || PendingCount > 0 //keep polling until every pending tag has been matched to a hash or given up on - otherwise one could be left stranded with nothing left to ever call refreshDownloads again
 		}
 
 		select {

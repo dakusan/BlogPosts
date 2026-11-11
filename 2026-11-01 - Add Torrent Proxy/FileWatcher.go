@@ -220,7 +220,7 @@ func ProcessFile(eventPath string) string {
 	}
 
 	//Send the torrent to qbittorrent via the WebUI API; qbitMonitor picks up progress/cleanup from here
-	if err := QbitAddTorrent(newDir+newFile, newDir, QbitManagedTag); err != nil {
+	if err := QbitPrepareAddTorrent(newDir+newFile, newDir); err != nil {
 		return "Error adding torrent to qbittorrent: " + err.Error()
 	}
 	log.Println("Added to qbittorrent: ", newDir+newFile)
